@@ -5,12 +5,13 @@ import type { User } from "@supabase/supabase-js";
 import {
   ArrowLeft, ArrowRight, BookHeart, BookMarked, BookOpen, Bookmark,
   Check, ChevronDown, ChevronLeft, ChevronRight, FileText, Highlighter,
-  List, LoaderCircle, Menu, MessageCircle, Minus, Moon, PanelRightClose,
+  List, LoaderCircle, Menu, MessageCircle, Minus, Moon, Search, Focus, Download, Copy, PanelRightClose,
   PanelRightOpen, Plus, Send, Settings2, Sparkles, StickyNote, Sun, Trash2, X
 } from "lucide-react";
 import { AuthGate } from "@/components/AuthGate";
 import { requireSupabase } from "@/lib/supabase";
 import type { Book, BookBlock, BookDocument, ReaderBookmark, ReaderNote, ReadingProgress } from "@/lib/types";
+import { downloadNotesMarkdown } from "@/lib/export";
 
 type Panel = "notes" | "ai";
 type Theme = "cream" | "white" | "dark";
@@ -58,6 +59,10 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
   const [rightOpen,setRightOpen]=useState(false);
   const [panel,setPanel]=useState<Panel>("notes");
   const [settingsOpen,setSettingsOpen]=useState(false);
+  const [searchOpen,setSearchOpen]=useState(false);
+  const [searchTerm,setSearchTerm]=useState("");
+  const [focusMode,setFocusMode]=useState(false);
+  const [settingsReady,setSettingsReady]=useState(false);
   const [selection,setSelection]=useState<Selection|null>(null);
   const [editingId,setEditingId]=useState<string|null>(null);
   const [noteDraft,setNoteDraft]=useState("");
@@ -69,6 +74,21 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
   const scrollRef=useRef<HTMLDivElement>(null);
   const saveTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
   const chatEndRef=useRef<HTMLDivElement>(null);
+  const searchInputRef=useRef<HTMLInputElement>(null);
+
+  useEffect(()=>{
+    try {
+      const saved=JSON.parse(localStorage.getItem("docsach-reader-settings")||"{}");
+      if (["cream","white","dark"].includes(saved.theme)) setTheme(saved.theme);
+      if (Number.isInteger(saved.fontSize) && saved.fontSize>=15 && saved.fontSize<=28) setFontSize(saved.fontSize);
+      if (typeof saved.lineHeight==="number" && saved.lineHeight>=1.4 && saved.lineHeight<=2.4) setLineHeight(saved.lineHeight);
+    } catch { /* Invalid old preferences are ignored. */ }
+    setSettingsReady(true);
+  },[]);
+  useEffect(()=>{
+    if(settingsReady) localStorage.setItem("docsach-reader-settings",JSON.stringify({theme,fontSize,lineHeight}));
+  },[settingsReady,theme,fontSize,lineHeight]);
+  useEffect(()=>{if(searchOpen) searchInputRef.current?.focus();},[searchOpen]);
 
   useEffect(()=>{
     let live=true;
@@ -117,6 +137,22 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
   const section=sections[sectionIndex];
   const visiblePages=useMemo(()=>documentData?.pages.filter(p=>section && p.page>=section.start && p.page<=section.end)||[],[documentData,section]);
   const activeBookmark=bookmarks.some(item=>item.page===page);
+  const searchResults=useMemo(()=>{
+    const query=searchTerm.trim().toLocaleLowerCase("vi");
+    if(!documentData||query.length<2)return [];
+    const found:{page:number;blockId:string;preview:string}[]=[];
+    for(const currentPage of documentData.pages){
+      for(const block of currentPage.blocks){
+        const match=block.text.toLocaleLowerCase("vi").indexOf(query);
+        if(match<0)continue;
+        const start=Math.max(0,match-65);
+        const preview=(start>0?"…":"")+block.text.slice(start,Math.min(block.text.length,match+query.length+95))+(match+query.length+95<block.text.length?"…":"");
+        found.push({page:currentPage.page,blockId:block.id,preview});
+        if(found.length>=150)return found;
+      }
+    }
+    return found;
+  },[documentData,searchTerm]);
   const totalPages=book?.total_pages||documentData?.totalPages||0;
   const percent=finished?100:totalPages?Math.min(99,Math.round((page-1)/totalPages*100)):0;
 
@@ -163,6 +199,21 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
   },[view,visiblePages,documentData,persist]);
 
   useEffect(()=>{ chatEndRef.current?.scrollIntoView({behavior:"smooth",block:"end"});},[chat,asking]);
+
+  useEffect(()=>{
+    const onKeyDown=(event:KeyboardEvent)=>{
+      const element=event.target as HTMLElement|null;
+      const typing=element?.matches("input, textarea, [contenteditable=true]");
+      if(event.key==="Escape") {setFocusMode(false);setSearchOpen(false);setSelection(null);setSettingsOpen(false);return;}
+      if(typing || event.metaKey || event.ctrlKey) return;
+      if(event.key.toLowerCase()==="f" && !event.altKey){event.preventDefault();setFocusMode(previous=>!previous);}
+      if(event.key==="/" && !event.altKey){event.preventDefault();setSearchOpen(true);}
+      if(event.altKey && event.key==="ArrowRight" && sectionIndex<sections.length-1){event.preventDefault();navigateTo(sections[sectionIndex+1].start);}
+      if(event.altKey && event.key==="ArrowLeft" && sectionIndex>0){event.preventDefault();navigateTo(sections[sectionIndex-1].start);}
+    };
+    window.addEventListener("keydown",onKeyDown);
+    return ()=>window.removeEventListener("keydown",onKeyDown);
+  });
 
   function captureSelection() {
     if(view!=="reflow")return;
@@ -262,12 +313,14 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
   if(loading)return <div className="loading-screen"><div className="loader"/><p>Đang mở những trang sách…</p></div>;
   if(error || !book)return <div className="loading-screen"><BookOpen size={35}/><p>{error||"Không tìm thấy sách"}</p><button className="outline-button" onClick={()=>router.push("/")}>Về thư viện</button></div>;
 
-  return <div className={`reader-shell reader-theme-${theme}`}>
+  return <div className={`reader-shell reader-theme-${theme} ${focusMode?"reader-focus":""}`}>
     <header className="reader-topbar">
       <div className="reader-top-left"><button className="icon-button" title="Về thư viện" onClick={()=>router.push("/")}><ArrowLeft size={19}/></button><div className="reader-divider"/>
       <button className="icon-button" title="Mục lục" onClick={()=>setLeftOpen(!leftOpen)}><Menu size={19}/></button><div className="reader-book-identity"><strong>{book.title}</strong><span>{book.author||"Thư viện của tôi"}</span></div></div>
       <div className="reader-top-mid"><div className="reader-view-switch"><button className={view==="reflow"?"selected":""} onClick={()=>setView("reflow")} disabled={!documentData?.wordCount}><BookOpen size={15}/> Sách điện tử</button><button className={view==="original"?"selected":""} onClick={()=>setView("original")}><FileText size={15}/> PDF gốc</button></div></div>
       <div className="reader-top-right">
+        <button className="icon-button" title="Tìm trong sách (/)" disabled={!documentData?.wordCount} onClick={()=>{setSearchOpen(true);setFocusMode(false)}}><Search size={19}/></button>
+        <button className="icon-button" title="Chế độ tập trung (F)" onClick={()=>setFocusMode(!focusMode)}><Focus size={19}/></button>
         <button className={`icon-button ${activeBookmark?"is-bookmarked":""}`} title="Đánh dấu trang" onClick={toggleBookmark}><Bookmark size={19} fill={activeBookmark?"currentColor":"none"}/></button>
         <div className="settings-wrap"><button className="icon-button" title="Cài đặt đọc sách" onClick={()=>setSettingsOpen(!settingsOpen)}><Settings2 size={19}/></button>
           {settingsOpen && <div className="settings-popover"><div className="settings-title"><strong>Tùy chỉnh trải nghiệm đọc</strong><button className="icon-button small" onClick={()=>setSettingsOpen(false)}><X size={16}/></button></div>
@@ -282,6 +335,7 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
         <button className="icon-button sidebar-toggle" title="Bảng ghi chú" onClick={()=>setRightOpen(!rightOpen)}>{rightOpen?<PanelRightClose size={20}/>:<PanelRightOpen size={20}/>}</button>
       </div>
     </header>
+    {focusMode && <button className="focus-exit" onClick={()=>setFocusMode(false)}><Focus size={15}/> Thoát tập trung (Esc)</button>}
     <div className="reader-body">
       {leftOpen && <aside className="reader-left">
         <div className="pane-top"><span className="eyebrow">CÔNG CỤ ĐỌC</span><button className="icon-button small mobile-close" onClick={()=>setLeftOpen(false)}><X size={16}/></button></div>
@@ -292,6 +346,7 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
         <div className="reading-stat"><span>TIẾN ĐỘ ĐỌC</span><div className="stat-percent"><strong>{percent}%</strong><small>{page}/{totalPages||"?"} trang</small></div><div className="progress-track"><span style={{width:`${percent}%`}}/></div></div>
       </aside>}
       <main className="reader-content" ref={scrollRef}>
+        {searchOpen && <div className="book-search"><div className="book-search-head"><Search size={18}/><input ref={searchInputRef} value={searchTerm} onChange={event=>setSearchTerm(event.target.value)} placeholder="Tìm câu, từ khóa trong sách…" aria-label="Tìm trong sách"/><button className="icon-button small" aria-label="Đóng tìm kiếm" onClick={()=>setSearchOpen(false)}><X size={17}/></button></div><div className="book-search-results">{searchTerm.trim().length<2?<p>Nhập ít nhất 2 ký tự để tìm trên toàn bộ sách.</p>:!searchResults.length?<p>Không tìm thấy đoạn văn phù hợp.</p>:<><span className="book-search-count">{searchResults.length >= 150?"150+ kết quả":`${searchResults.length} kết quả`}</span>{searchResults.map(result=><button key={result.blockId} onClick={()=>{setView("reflow");setSearchOpen(false);navigateTo(result.page,result.blockId)}}><span>Trang {result.page}</span><p>{result.preview}</p></button>)}</>}</div></div>}
         {view==="original" ? <div className="original-reader"><div className="original-notice"><FileText size={16}/> Đang xem bản PDF gốc. Chuyển sang Sách điện tử để thay đổi cỡ chữ và highlight.</div><iframe src={pdfUrl} title={book.title} className="pdf-iframe"/></div> :
           <div className="reflow-container" onMouseUp={captureSelection}>
             <div className="reflow-overline">DOCSACHWITHME <span>✳</span> READING EDITION</div>
@@ -317,7 +372,7 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
       {rightOpen && <aside className="reader-right">
         <div className="right-panel-tabs"><button className={panel==="notes"?"active":""} onClick={()=>setPanel("notes")}><StickyNote size={16}/> Ghi chú</button><button className={panel==="ai"?"active":""} onClick={()=>setPanel("ai")}><Sparkles size={16}/> Bạn đọc AI</button><button className="icon-button small" title="Đóng" onClick={()=>setRightOpen(false)}><X size={16}/></button></div>
         {panel==="notes" ? <div className="notes-pane">
-          <div className="right-pane-intro"><h3>Khoảnh khắc đáng nhớ.</h3><p>Lưu lại những câu khiến bạn dừng đọc và suy nghĩ.</p></div>
+          <div className="right-pane-intro"><h3>Khoảnh khắc đáng nhớ.</h3><p>Lưu lại những câu khiến bạn dừng đọc và suy nghĩ.</p><button className="export-notes" disabled={!notes.length} onClick={()=>downloadNotesMarkdown(book,notes,bookmarks,documentData)}><Download size={15}/> Xuất ghi chú Markdown</button></div>
           {notes.length ? <div className="note-list">{notes.map(note=><div key={note.id} className={`note-item ${editingId===note.id?"active":""}`}>
             <button className="note-quote" onClick={()=>{setEditingId(note.id);setNoteDraft(note.note);const block=documentData?.pages.flatMap(p=>p.blocks).find(b=>b.id===note.block_id);navigateTo(block?.page||1,note.block_id)}}><span className={`note-dot ${note.color}`}/>“{note.quote.slice(0,230)}{note.quote.length>230?"…":""}”</button>
             {editingId===note.id ? <div className="note-editor"><textarea value={noteDraft} rows={3} onChange={e=>setNoteDraft(e.target.value)} onBlur={saveNote} placeholder="Bạn nghĩ gì về đoạn này?"/><div><button onClick={saveNote}><Check size={14}/> Lưu ghi chú</button><button title="Xóa ghi chú" onClick={()=>deleteNote(note.id)}><Trash2 size={15}/></button></div></div> : note.note&&<p className="note-comment">{note.note}</p>}
@@ -336,7 +391,7 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
         </div>}
       </aside>}
     </div>
-    {selection && <div className="selection-toolbar"><span><Highlighter size={16}/> Highlight</span><button className="color-dot yellow" title="Vàng" onClick={()=>highlight("yellow")}/><button className="color-dot green" title="Xanh" onClick={()=>highlight("green")}/><button className="color-dot pink" title="Hồng" onClick={()=>highlight("pink")}/><span className="selection-separator"/><button title="Nhờ AI giải thích đoạn đã chọn" onClick={()=>{const chosen=selection;setSelection(null);window.getSelection()?.removeAllRanges();askAi("Giải thích đoạn văn tôi vừa chọn theo ngữ cảnh cuốn sách.", "explain", chosen.quote)}}><Sparkles size={16}/> Giải thích</button><button title="Đóng" onClick={()=>{setSelection(null);window.getSelection()?.removeAllRanges()}}><X size={15}/></button></div>}
+    {selection && <div className="selection-toolbar"><span><Highlighter size={16}/> Highlight</span><button className="color-dot yellow" title="Vàng" onClick={()=>highlight("yellow")}/><button className="color-dot green" title="Xanh" onClick={()=>highlight("green")}/><button className="color-dot pink" title="Hồng" onClick={()=>highlight("pink")}/><span className="selection-separator"/><button title="Sao chép đoạn văn" onClick={()=>{if(selection)navigator.clipboard.writeText(selection.quote).catch(()=>{});setSelection(null);window.getSelection()?.removeAllRanges()}}><Copy size={15}/></button><button title="Nhờ AI giải thích đoạn đã chọn" onClick={()=>{const chosen=selection;setSelection(null);window.getSelection()?.removeAllRanges();askAi("Giải thích đoạn văn tôi vừa chọn theo ngữ cảnh cuốn sách.", "explain", chosen.quote)}}><Sparkles size={16}/> Giải thích</button><button title="Đóng" onClick={()=>{setSelection(null);window.getSelection()?.removeAllRanges()}}><X size={15}/></button></div>}
   </div>;
 }
 export default function ReaderPage() {

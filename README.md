@@ -106,3 +106,24 @@ supabase/schema.sql          # Tables, policies, Storage
 ## Hướng phát triển
 
 OCR cho PDF scan; ảnh minh họa, footnote và bảng trong reflow; embeddings/pgvector để tìm ý nghĩa sâu hơn; export Markdown; flashcard; đánh dấu và chú thích trên PDF gốc; liên kết ghi chú giữa nhiều sách; virtual rendering cho sách dài; quản lý phiên bản và sao lưu dữ liệu.
+
+## Test chức năng khi chưa cấu hình Supabase
+
+Mở `/demo` trên website (ví dụ `https://ten-project.vercel.app/demo`). Chế độ này chạy **100% trong trình duyệt**:
+
+- Upload một hoặc nhiều PDF vào IndexedDB của thiết bị đang dùng (tối đa 50MB/file).
+- Đọc ebook (reflow), chuyển PDF gốc, tăng giảm cỡ chữ, đổi nền, giãn dòng.
+- Highlight, thêm/xóa/sửa ghi chú, bookmark trang, tìm kiếm trong sách.
+- Xuất ghi chú Markdown, đọc tiếp từ trang đã lưu trên cùng trình duyệt.
+- Chế độ tập trung: phím `F`; tìm kiếm nhanh: phím `/`; chuyển trang demo: `Alt+←/→`.
+
+Dữ liệu ở `/demo` **không đồng bộ** với tài khoản cloud và có thể mất khi xóa dữ liệu trình duyệt. Đây là sandbox thử các chức năng, không thay thế thư viện online. Khi bạn nhập biến môi trường Supabase, trang `/` sẽ sử dụng kho lưu trữ cloud đúng như thiết kế.
+
+## Các tiện ích mới trong Reader cloud
+
+- Tìm kiếm nội dung PDF văn bản và nhảy tới đoạn khớp (phím `/`).
+- Chế độ đọc tập trung (phím `F`, `Esc` để thoát).
+- Đi tới phần trước/tiếp theo với `Alt+←/→`.
+- Ghi nhớ chủ đề, cỡ chữ và giãn dòng trên trình duyệt.
+- Xuất ghi chú, trích đoạn và bookmark thành Markdown.
+- Sao chép đoạn văn được chọn.
