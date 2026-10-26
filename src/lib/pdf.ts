@@ -72,7 +72,7 @@ export async function extractPdf(file: File | Blob, onProgress?: (current: numbe
       const heading = /^(chương|chapter|phần|part|mục)\s+([0-9ivxlcdm]+|[a-z])\b/i.test(sentence)
         || (/^[A-ZÀ-Ỹ0-9\s:–—.-]{6,85}$/.test(sentence) && sentence.length < 75 && line.parts.some(p => p.fontSize > 13));
       const gap = lastY === null ? 0 : lastY - line.y;
-      if (heading || gap > medianGap * 1.6 || current.length > 850 || (current.endsWith(/[.!?]["”]?$/) && sentence.length < 75)) {
+      if (heading || gap > medianGap * 1.6 || current.length > 850 || (/[.!?]["”]?$/.test(current) && sentence.length < 75)) {
         flush();
       }
       if (heading) {
