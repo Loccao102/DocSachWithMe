@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { coverUrl, epubUrl, gutenbergPage, plaintextUrl, type GutenbergBook } from "../src/lib/free-books";
+import { approvedGutenbergTextUrl, coverUrl, epubUrl, gutenbergPage, plaintextUrl, type GutenbergBook } from "../src/lib/free-books";
 import { textToBookDocument } from "../src/lib/gutenberg-text";
 
 const sample:GutenbergBook={
@@ -47,4 +47,13 @@ This part must not appear.
 
 test("empty Gutenberg document is rejected",()=>{
   assert.throws(()=>textToBookDocument("*** START OF THE PROJECT GUTENBERG EBOOK TEST ***\nHello\n*** END OF THE PROJECT GUTENBERG EBOOK TEST ***"),/chưa có nội dung/);
+});
+
+test("Gutenberg source URL validates path and rejects arbitrary proxy targets",()=>{
+  assert.ok(approvedGutenbergTextUrl("https://www.gutenberg.org/ebooks/11.txt.utf-8",11));
+  assert.ok(approvedGutenbergTextUrl("https://www.gutenberg.org/cache/epub/11/pg11.txt",11));
+  assert.equal(approvedGutenbergTextUrl("https://evil.example/cache/epub/11/pg11.txt",11),null);
+  assert.equal(approvedGutenbergTextUrl("https://www.gutenberg.org/ebooks/12.txt.utf-8",11),null);
+  assert.equal(approvedGutenbergTextUrl("http://www.gutenberg.org/cache/epub/11/pg11.txt",11),null);
+  assert.equal(approvedGutenbergTextUrl("https://www.gutenberg.org/cache/epub/11/pg11.txt?unsafe=1",11),null);
 });

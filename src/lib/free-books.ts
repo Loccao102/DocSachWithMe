@@ -41,3 +41,20 @@ export function epubUrl(book:GutenbergBook):string|null {
   return files.find(([mime,url])=>mime.startsWith("application/epub+zip") && !/noimages/i.test(url))?.[1]
     || files.find(([mime])=>mime.startsWith("application/epub+zip"))?.[1]||null;
 }
+
+/** Validate a Gutendex-provided user-selected plaintext URL before server retrieval. */
+export function approvedGutenbergTextUrl(value:string|null,id:number):URL|null {
+  if(!value||!Number.isInteger(id)||id<=0)return null;
+  try {
+    const url=new URL(value);
+    if(url.protocol!=="https:" || url.username || url.password || url.port
+      || !["www.gutenberg.org","gutenberg.org"].includes(url.hostname))
+      return null;
+    const path=url.pathname;
+    const approved=path.startsWith(`/cache/epub/${id}/`)
+      || path.startsWith(`/files/${id}/`)
+      || new RegExp(`^/ebooks/${id}\\.txt(?:\\.utf-8)?$`,"i").test(path);
+    if(!approved || url.search || url.hash)return null;
+    return url;
+  }catch{return null;}
+}

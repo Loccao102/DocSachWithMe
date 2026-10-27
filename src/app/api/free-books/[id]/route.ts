@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { GutenbergBook } from "@/lib/free-books";
-import { plaintextUrl } from "@/lib/free-books";
+import { plaintextUrl, approvedGutenbergTextUrl } from "@/lib/free-books";
 import { textToBookDocument } from "@/lib/gutenberg-text";
 
 type Context={params:Promise<{id:string}>};
@@ -17,17 +17,6 @@ async function getMetadata(id:string):Promise<GutenbergBook>{
   return book;
 }
 
-/** Only allow explicitly selected Gutenberg text resources; no arbitrary URL proxy. */
-function approvedTextLink(value:string|null):URL|null{
-  if(!value)return null;
-  try{
-    const uri=new URL(value);
-    if(uri.protocol!=="https:" || !["www.gutenberg.org","gutenberg.org"].includes(uri.hostname)
-      || uri.username || uri.password || uri.port || !/^\/(?:cache\/epub\/|files\/)/.test(uri.pathname))
-      return null;
-    return uri;
-  }catch{return null;}
-}
 
 export async function GET(request:NextRequest,{params}:Context){
   const {id}=await params;
@@ -37,7 +26,7 @@ export async function GET(request:NextRequest,{params}:Context){
     if(book.copyright!==false)
       return NextResponse.json({error:"Chưa có xác nhận sách thuộc phạm vi public domain tại Mỹ."},{status:403});
     if(request.nextUrl.searchParams.get("mode")!=="read")return NextResponse.json(book,{headers:{"Cache-Control":"public, s-maxage=86400"}});
-    const src=approvedTextLink(plaintextUrl(book));
+    const src=approvedGutenbergTextUrl(plaintextUrl(book),book.id);
     if(!src)return NextResponse.json({error:"Sách không có bản TXT phù hợp để đọc trong ứng dụng. Bạn có thể mở sách tại nguồn."},{status:422});
     // Fetched only following an explicit user read action, never bulk-prefetched.
     const remote=await fetch(src.toString(),{
