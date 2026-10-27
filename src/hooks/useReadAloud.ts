@@ -52,7 +52,7 @@ export function useReadAloud() {
     setSpeed(clamped);
   }, []);
 
-  const play = useCallback((segments: SpokenSegment[]) => {
+  const play = useCallback((segments: SpokenSegment[], language = "vi-VN") => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     const queue = segments.flatMap(segment => splitIntoChunks(segment.text).map(text => ({ id: segment.id, text })));
     stop();
@@ -69,11 +69,11 @@ export function useReadAloud() {
       }
       const next = queue[index++];
       const utterance = new SpeechSynthesisUtterance(next.text);
-      utterance.lang = "vi-VN";
+      utterance.lang = language;
       utterance.rate = speedRef.current;
       const voices = synthesis.getVoices();
-      const vietnamese = voices.find(v => v.lang.toLowerCase().startsWith("vi"));
-      if (vietnamese) utterance.voice = vietnamese;
+      const chosen = voices.find(v => v.lang.toLowerCase() === language.toLowerCase()) || voices.find(v => v.lang.toLowerCase().startsWith(language.slice(0,2).toLowerCase()));
+      if (chosen) utterance.voice = chosen;
       setActiveId(next.id);
       utterance.onend = speakNext;
       utterance.onerror = () => {

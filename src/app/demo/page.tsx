@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft, ArrowRight, BookHeart, BookOpen, Bookmark, Check, ChevronLeft, ChevronRight,
   Cloud, Download, FileText, Focus, Highlighter, LibraryBig, List, LoaderCircle,
-  Menu, Minus, Moon, Plus, Search, Settings2, StickyNote, Sun, Trash2, UploadCloud, Volume2, Pause, Play, Square, Pencil, X
+  Menu, Minus, Moon, Plus, Search, Globe2, Settings2, StickyNote, Sun, Trash2, UploadCloud, Volume2, Pause, Play, Square, Pencil, X
 } from "lucide-react";
 import { extractPdf } from "@/lib/pdf";
 import { useReadAloud } from "@/hooks/useReadAloud";
@@ -200,7 +200,7 @@ function DemoApp(){
   const toc=current?.document?.toc||[];
   if(loading)return <div className="loading-screen"><div className="loader"/><p>Đang mở thư viện thử nghiệm…</p></div>;
   if(!current)return <div className="demo-home">
-    <header className="demo-home-nav"><div className="brand"><span className="brand-symbol"><BookHeart size={22}/></span>DocSach<span className="brand-light">WithMe</span></div><span className="demo-badge">LOCAL PREVIEW</span></header>
+    <header className="demo-home-nav"><div className="brand"><span className="brand-symbol"><BookHeart size={22}/></span>DocSach<span className="brand-light">WithMe</span></div><div className="demo-nav-actions"><a className="demo-discover-link" href="/discover"><Globe2 size={16}/> Khám phá sách miễn phí</a><span className="demo-badge">LOCAL PREVIEW</span></div></header>
     <main className="demo-home-main"><div className="demo-home-hero"><span className="eyebrow">YOUR READING STUDIO</span><h1>Đọc sâu hơn. <em>Ghi nhớ lâu hơn.</em></h1><p>Thử ngay trình đọc ebook, highlight và ghi chú mà không cần tài khoản. Sách của bạn chỉ nằm trên thiết bị này.</p>
       <div className="demo-hero-buttons">
         <button className="primary-button" disabled={uploading||restoring} onClick={()=>fileRef.current?.click()}><UploadCloud size={18}/>{uploading?uploadLabel:"Thêm sách PDF"}</button>

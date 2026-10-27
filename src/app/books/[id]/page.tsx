@@ -25,7 +25,7 @@ function getSections(document: BookDocument | null): Section[] {
   const chapters = [...new Map(document.toc.map(chapter => [chapter.page, chapter])).values()]
     .filter(chapter => chapter.page >= 1 && chapter.page <= document.totalPages)
     .sort((a,b) => a.page-b.page);
-  if (!chapters.length || chapters.length > 150) {
+  if (!chapters.length || chapters.length > 70) {
     const fallback: Section[] = [];
     for (let p=1; p<=document.totalPages; p+=8) fallback.push({
       title: `Trang ${p}–${Math.min(document.totalPages,p+7)}`, start:p,

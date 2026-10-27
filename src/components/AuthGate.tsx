@@ -31,7 +31,7 @@ export function AuthGate({ children }: { children: (user: User) => React.ReactNo
     <p>Dự án đã sẵn sàng. Để bật thư viện cloud, hãy tạo Supabase project và cấu hình 2 biến môi trường trên Vercel.</p>
     <div className="setup-code"><code>NEXT_PUBLIC_SUPABASE_URL</code><code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code></div>
     <p className="muted small">Sau đó chạy <strong>supabase/schema.sql</strong> trong SQL Editor. Các bước đầy đủ nằm trong README trên GitHub.</p>
-    <div className="onboarding-actions"><a href="/demo" className="primary-button">Dùng thử Reader không cần tài khoản <ArrowRight size={16}/></a><a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer" className="outline-button">Thiết lập cloud</a></div><p className="small muted">Chế độ thử lưu sách vào bộ nhớ của trình duyệt trên thiết bị này; chưa đồng bộ cloud.</p>
+    <div className="onboarding-actions"><a href="/discover" className="outline-button">Khám phá sách miễn phí</a><a href="/demo" className="primary-button">Dùng thử Reader không cần tài khoản <ArrowRight size={16}/></a><a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer" className="outline-button">Thiết lập cloud</a></div><p className="small muted">Chế độ thử lưu sách vào bộ nhớ của trình duyệt trên thiết bị này; chưa đồng bộ cloud.</p>
   </div></div>;
 
   if (loading) return <div className="loading-screen"><div className="loader" /><p>Đang mở thư viện của bạn…</p></div>;
@@ -74,7 +74,7 @@ export function AuthGate({ children }: { children: (user: User) => React.ReactNo
         <button type="submit" disabled={sending} className="primary-button full">{sending ? "Đang gửi…" : "Tiếp tục với email"} <ArrowRight size={18}/></button>
       </form>}
       {sent && <button className="subtle-button" onClick={() => setSent(false)}>Sử dụng email khác</button>}
-      <p className="auth-hint">Sách và ghi chú của bạn chỉ hiển thị trong tài khoản của bạn.</p>
+      <p className="auth-hint">Sách và ghi chú cloud chỉ hiển thị trong tài khoản của bạn. <a href="/discover">Khám phá sách miễn phí không cần đăng nhập.</a></p>
     </div></div>
   </div>;
 }

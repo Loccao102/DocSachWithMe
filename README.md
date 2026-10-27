@@ -168,3 +168,21 @@ Các file upload mới sẽ được phân tích thêm:
 - Trình chỉnh mục lục hoạt động ở `/demo` và với sách trên Supabase Storage sau khi đăng nhập. Không làm thay đổi các đoạn văn hoặc ghi chú đã lưu.
 
 **Giới hạn:** Các PDF đa cột phức tạp, hình ảnh, bảng biểu, footnote và sách scan chưa được chuyển đổi hoàn hảo. Phân tích layout là heuristic, bạn nên so lại PDF gốc. Các sách đã upload từ phiên bản trước không tự reprocess; có thể upload lại hoặc chỉnh mục lục thủ công để có cấu trúc tốt hơn.
+
+## Sách miễn phí — Project Gutenberg + Gutendex
+
+Vào **/discover** (hoặc mục **Sách miễn phí** trong thư viện). Tính năng **không cần Supabase hoặc OpenAI API key**:
+
+- Dùng [Gutendex](https://github.com/garethbjohnson/gutendex) để tìm sách theo tác giả, tên, ngôn ngữ, chủ đề, mức phổ biến. Trình lọc dùng `copyright=false`, tức tác phẩm được ghi nhận thuộc public domain tại Hoa Kỳ.
+- Hiển thị bìa, tác giả, ngôn ngữ, trạng thái đã lưu, phân trang tìm kiếm.
+- Chọn **Đọc ngay** để nạp bản văn thuần (plain text) từ Project Gutenberg vào Reader của DocSachWithMe. Việc tải chỉ xảy ra khi người dùng chủ động mở sách, không tải hàng loạt.
+- Trình đọc có tùy chọn typography, chủ đề giấy ấm/trắng/tối, tìm trong sách, mục lục trích từ text, bookmark, highlight, ghi chú, giọng đọc và xuất ghi chú Markdown.
+- Lưu nội dung và tiến độ trong IndexedDB để đọc lại trên cùng trình duyệt, không cần gọi API lần nữa nếu đã lưu.
+- Bấm biểu tượng **EPUB** để tải bản gốc từ nguồn; có nút mở sách trực tiếp tại website Project Gutenberg.
+- Nếu sách không có bản TXT phù hợp, nhà cung cấp từ chối kết nối hoặc dung lượng vượt giới hạn đọc online, có đường dẫn mở **nguồn gốc**. Sách quá lớn không được tải qua server.
+
+**Bản quyền:** Project Gutenberg và Gutendex phân loại public domain theo luật Hoa Kỳ. Nội dung *không mặc nhiên* tự do sử dụng ở Việt Nam hoặc quốc gia khác; tự kiểm tra trước khi tải, lưu, chia sẻ hay phân phối. Đọc thêm https://www.gutenberg.org/policy/terms_of_use.html.
+
+**Tài nguyên và riêng tư:** API catalog được cache (1 giờ); metadata từng sách cache (1 ngày). Trên Vercel, server chỉ tải tài nguyên `text/plain` qua URL HTTPS thuộc Project Gutenberg, với giới hạn 2,5 MB và chỉ khi người dùng chủ động mở sách. Dữ liệu đọc đã tải về sẽ được lưu trên thiết bị, không tự nhập vào Supabase; sách tải về không được commit lên GitHub. Kho này khác với PDF cloud và `/demo`.
+
+**Ghi chú API:** Gutendex là dịch vụ cộng đồng, không phải API chính thức của Project Gutenberg. Nếu Gutendex gián đoạn, có thể dùng trang Gutenberg trực tiếp; việc tải văn bản từ Gutenberg có thể bị giới hạn tùy chính sách nguồn. Đọc sách online qua Gutendex **chỉ** dùng metadata; văn bản đến từ Gutenberg.

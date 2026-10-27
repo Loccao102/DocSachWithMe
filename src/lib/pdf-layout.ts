@@ -122,12 +122,7 @@ export function pageToBlocks(page: AnalyzedPage): BookPage {
       text.length+line.text.length>1200;
     if(heading || boundary)flush();
     if(heading){text=line.text;flush("heading");}
-    else if(text.endsWith("-") && /^\p{L}/u.test(line.text)){
-      // Vietnamese compounds often use meaningful hyphens; soft hyphenation in English usually does not.
-      const word=text.match(/([\p{L}]+)-$/u)?.[1]||"";
-      if(/[À-ỹĐđ]/u.test(word))text+=line.text;
-      else text=text.slice(0,-1)+line.text;
-    }
+    else if(text.endsWith("-") && /^\p{L}/u.test(line.text))text=text.slice(0,-1)+line.text;
     else text+=(text?" ":"")+line.text;
     lastY=line.y;lastX=line.x;lastSize=line.fontSize;
   }
