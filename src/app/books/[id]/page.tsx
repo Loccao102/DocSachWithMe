@@ -368,6 +368,7 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
         <div className="toc-list">{sections.length ? sections.map((chapter,index)=><button key={index} className={sectionIndex===index?"selected":""} onClick={()=>{navigateTo(chapter.start,chapter.blockId);if(window.innerWidth<800)setLeftOpen(false)}}><span>{(index+1).toString().padStart(2,"0")}</span><span>{chapter.title}</span></button>):<p className="empty-side-text">Dùng chế độ PDF gốc để xem mục lục theo tài liệu.</p>}</div>
         <div className="bookmarks-area"><div className="toc-heading"><Bookmark size={17}/><strong>Trang đã lưu</strong><span>{bookmarks.length}</span></div>
         {bookmarks.length ? bookmarks.map(item=><button key={item.id} className="bookmark-entry" onClick={()=>navigateTo(item.page,item.block_id)}>Trang {item.page}<ChevronRight size={14}/></button>):<p className="empty-side-text">Bấm biểu tượng đánh dấu trang để quay lại sau.</p>}</div>
+        {Boolean(documentData?.analysis?.scannedPages.length) && <p className="pdf-quality-tip">{documentData?.analysis?.scannedPages.length} trang chưa có văn bản. Hãy kiểm tra bản PDF gốc; những trang dạng ảnh cần OCR.</p>}
         <div className="reading-stat"><span>TIẾN ĐỘ ĐỌC</span><div className="stat-percent"><strong>{percent}%</strong><small>{page}/{totalPages||"?"} trang</small></div><div className="progress-track"><span style={{width:`${percent}%`}}/></div></div>
       </aside>}
       <main className="reader-content" ref={scrollRef}>

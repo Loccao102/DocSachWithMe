@@ -3,10 +3,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft, ArrowRight, BookHeart, BookOpen, Bookmark, Check, ChevronLeft, ChevronRight,
   Cloud, Download, FileText, Focus, Highlighter, LibraryBig, List, LoaderCircle,
-  Menu, Minus, Moon, Plus, Search, Settings2, StickyNote, Sun, Trash2, UploadCloud, Volume2, Pause, Play, Square, X
+  Menu, Minus, Moon, Plus, Search, Settings2, StickyNote, Sun, Trash2, UploadCloud, Volume2, Pause, Play, Square, Pencil, X
 } from "lucide-react";
 import { extractPdf } from "@/lib/pdf";
 import { useReadAloud } from "@/hooks/useReadAloud";
+import TocEditor from "@/components/TocEditor";
 import { exportDemoBackup, importDemoBackup } from "@/lib/backup";
 import { deleteDemoBook, getDemoBook, listDemoBooks, saveDemoBook, type DemoBook, type DemoNote } from "@/lib/demo-store";
 import type { BookBlock } from "@/lib/types";
@@ -49,6 +50,7 @@ function DemoApp(){
   const [selection,setSelection]=useState<{blockId:string;quote:string;page:number}|null>(null);
   const [draft,setDraft]=useState("");
   const [editingId,setEditingId]=useState<string|null>(null);
+  const [tocEditing,setTocEditing]=useState(false);
   const fileRef=useRef<HTMLInputElement>(null);
   const restoreRef=useRef<HTMLInputElement>(null);
   const [restoring,setRestoring]=useState(false);
@@ -155,6 +157,13 @@ function DemoApp(){
     if(current){saveDemoBook(current).catch(()=>{});setBooks(previous=>previous.map(book=>book.id===current.id?current:book));}
     setCurrent(null);setSelection(null);setFocus(false);
   }
+  async function updateTableOfContents(updated:NonNullable<DemoBook["document"]>){
+    if(!current)throw new Error("Chưa mở cuốn sách nào.");
+    const changed={...current,document:updated};
+    await saveDemoBook(changed);
+    setCurrent(changed);
+    setBooks(previous=>previous.map(item=>item.id===changed.id?changed:item));
+  }
   function capture(){
     const s=window.getSelection();const quote=s?.toString().replace(/\s+/g," ").trim()||"";
     if(!s||quote.length<2||quote.length>1500)return;
@@ -228,10 +237,11 @@ function DemoApp(){
     <div className="reader-body">
       {leftOpen&&<aside className="reader-left demo-nav-side">
         <div className="pane-top"><span className="eyebrow">BOOK NAVIGATOR</span><button className="icon-button small mobile-close" onClick={()=>setLeftOpen(false)}><X size={15}/></button></div>
-        <div className="toc-heading"><List size={17}/><strong>Mục lục</strong></div>
+        <div className="toc-heading"><List size={17}/><strong>Mục lục</strong><button className="toc-editor-trigger" title="Chỉnh sửa tên và trang bắt đầu của chương" disabled={!current.document?.wordCount} onClick={()=>setTocEditing(true)}><Pencil size={15}/></button></div>
         <div className="toc-list">{toc.length?toc.map((section,index)=><button key={index} className={page===section.page?"selected":""} onClick={()=>{turnTo(section.page,section.blockId);if(window.innerWidth<800)setLeftOpen(false)}}><span>{String(index+1).padStart(2,"0")}</span><span>{section.title}</span></button>):<p className="empty-side-text">Chưa nhận dạng được tên chương. Bạn vẫn có thể chuyển từng trang.</p>}</div>
         <div className="bookmarks-area"><div className="toc-heading"><Bookmark size={17}/><strong>Trang lưu</strong></div>
           {current.bookmarks.slice().sort((a,b)=>a-b).map(value=><button className="bookmark-entry" key={value} onClick={()=>turnTo(value)}>Trang {value}<ChevronRight size={14}/></button>)}</div>
+        {Boolean(current.document?.analysis?.scannedPages.length) && <p className="pdf-quality-tip">Có {current.document?.analysis?.scannedPages.length} trang không có văn bản. Chế độ PDF gốc giữ nguyên hình ảnh và bố cục.</p>}
         <div className="reading-stat"><span>TIẾN ĐỘ</span><div className="stat-percent"><strong>{Math.round((page-1)/Math.max(current.document?.totalPages||page,1)*100)}%</strong><small>{page}/{current.document?.totalPages||"?"} trang</small></div><div className="progress-track"><span style={{width:`${Math.round((page-1)/Math.max(current.document?.totalPages||page,1)*100)}%`}}/></div></div>
       </aside>}
       <main className="reader-content" ref={readerRef}>
@@ -261,6 +271,7 @@ function DemoApp(){
       <div className="demo-settings"><button title="Giảm cỡ chữ" onClick={()=>setFontSize(Math.max(15,fontSize-1))}><Minus size={14}/></button><span>{fontSize}px</span><button title="Tăng cỡ chữ" onClick={()=>setFontSize(Math.min(28,fontSize+1))}><Plus size={14}/></button><button title="Đổi màu nền" onClick={()=>setTheme(theme==="cream"?"white":theme==="white"?"dark":"cream")}>{theme==="dark"?<Moon size={17}/>:<Sun size={17}/>}</button><button title="Giãn dòng" onClick={()=>setLineHeight(lineHeight>2.1?1.5:lineHeight+.2)}><Settings2 size={17}/></button></div>
     </div>
     {tts.state!=="idle"&&<div className="read-aloud-controls demo-audio-controls"><Volume2 size={17}/><span>Nghe trang {page}</span><select aria-label="Tốc độ đọc" value={tts.speed} onChange={e=>tts.updateSpeed(Number(e.target.value))}><option value={0.8}>0.8×</option><option value={1}>1×</option><option value={1.2}>1.2×</option><option value={1.5}>1.5×</option></select><button onClick={tts.pauseOrResume} title="Tạm dừng hoặc tiếp tục">{tts.state==="playing"?<Pause size={17}/>:<Play size={17}/>}</button><button onClick={tts.stop} title="Dừng đọc"><Square size={16}/></button></div>}
+    {tocEditing&&current.document&&<TocEditor document={current.document} onSave={updateTableOfContents} onClose={()=>setTocEditing(false)}/>}
     {selection&&<div className="selection-toolbar"><span><Highlighter size={15}/> Highlight</span>{(["yellow","green","pink"] as const).map(color=><button key={color} title={color} className={`color-dot ${color}`} onClick={()=>highlight(color)}/>)}<button onClick={()=>setSelection(null)}><X size={15}/></button></div>}
   </div>;
 }

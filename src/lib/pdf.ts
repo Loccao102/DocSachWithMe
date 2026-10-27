@@ -1,94 +1,71 @@
-import type { BookBlock, BookChapter, BookDocument, BookPage } from "./types";
+import type { BookChapter, BookDocument } from "./types";
+import { analyzePage, pageToBlocks, removeRunningHeaders, type PdfFragment } from "./pdf-layout";
 
-export async function extractPdf(file: File | Blob, onProgress?: (current: number, total: number) => void): Promise<BookDocument> {
-  const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
-
-  const buffer = await file.arrayBuffer();
-  const pdf = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise;
-  const pages: BookPage[] = [];
-  const toc: BookChapter[] = [];
-  let wordCount = 0;
-
-  for (let number = 1; number <= pdf.numPages; number++) {
-    const page = await pdf.getPage(number);
-    const content = await page.getTextContent();
-    const positioned = content.items
-      .filter((item): item is typeof item & { str: string; transform: number[]; width: number } =>
-        "str" in item && typeof item.str === "string" && "transform" in item && item.str.trim().length > 0)
-      .map(item => ({
-        text: item.str,
-        x: item.transform[4],
-        y: item.transform[5],
-        width: item.width,
-        fontSize: Math.hypot(item.transform[2], item.transform[3])
+export async function extractPdf(
+  file: File | Blob,
+  onProgress?: (current:number,total:number)=>void
+):Promise<BookDocument>{
+  const pdfjs=await import("pdfjs-dist");
+  pdfjs.GlobalWorkerOptions.workerSrc=new URL("pdfjs-dist/build/pdf.worker.min.mjs",import.meta.url).toString();
+  const data=new Uint8Array(await file.arrayBuffer());
+  const pdf=await pdfjs.getDocument({data}).promise;
+  try{
+    const analyzed=[];
+    for(let pageNumber=1;pageNumber<=pdf.numPages;pageNumber++){
+      const page=await pdf.getPage(pageNumber);
+      const content=await page.getTextContent();
+      const viewport=page.getViewport({scale:1});
+      const positioned:PdfFragment[]=content.items.filter(item=>"str" in item && item.str.trim().length>0).map(item=>({
+        text:item.str,x:item.transform[4],y:item.transform[5],width:item.width,
+        fontSize:Math.max(1,Math.hypot(item.transform[2],item.transform[3]))
       }));
-
-    // Group PDF fragments by baseline so text becomes actual readable lines.
-    positioned.sort((a, b) => b.y - a.y || a.x - b.x);
-    const lines: { y: number; parts: typeof positioned; fontSize: number }[] = [];
-    for (const part of positioned) {
-      let line = lines.find(candidate => Math.abs(candidate.y - part.y) < Math.max(2.5, part.fontSize * .27));
-      if (!line) {
-        line = { y: part.y, parts: [], fontSize: part.fontSize };
-        lines.push(line);
-      }
-      line.parts.push(part);
+      analyzed.push(analyzePage(pageNumber,positioned,{width:viewport.width,height:viewport.height}));
+      onProgress?.(pageNumber,pdf.numPages);
     }
-    lines.sort((a, b) => b.y - a.y);
-
-    const blocks: BookBlock[] = [];
-    let current = "";
-    let lastY: number | null = null;
-    let blockIndex = 0;
-    const flush = (heading = false) => {
-      const text = current.replace(/\s+/g, " ").trim();
-      if (text) {
-        const id = `p${number}-b${blockIndex++}`;
-        blocks.push({ id, page: number, text, kind: heading ? "heading" : "paragraph" });
-        wordCount += text.split(/\s+/).length;
-        if (heading && toc.length < 100) toc.push({ title: text.slice(0, 100), page: number, blockId: id });
+    const cleaned=removeRunningHeaders(analyzed);
+    const pages=cleaned.map(pageToBlocks);
+    const wordCount=pages.reduce((sum,p)=>sum+p.blocks.reduce((acc,b)=>acc+b.text.split(/\s+/).length,0),0);
+    const autoToc:BookChapter[]=pages.flatMap(p=>p.blocks.filter(b=>b.kind==="heading").map(b=>({
+      title:b.text.slice(0,110),page:p.page,blockId:b.id
+    }))).slice(0,120);
+    const toc:BookChapter[]=[];
+    const resolvedPages=new Set<number>();
+    try{
+      const outline=await pdf.getOutline();
+      if(outline?.length){
+        const pending=[...outline.map(item=>({item,depth:0}))];
+        while(pending.length && toc.length<150){
+          const {item,depth}=pending.shift()!;
+          if(depth<=2 && item.title && item.dest){
+            try{
+              const target=typeof item.dest==="string"?await pdf.getDestination(item.dest):item.dest;
+              if(Array.isArray(target) && target.length>0){
+                const first=target[0] as unknown;
+                const index=typeof first==="number"?first:(first && typeof first==="object" && "num" in first
+                  ?await pdf.getPageIndex(first as {num:number;gen:number}): -1);
+                const pageNumber=index+1;
+                if(pageNumber>=1&&pageNumber<=pages.length&&!resolvedPages.has(pageNumber)){
+                  resolvedPages.add(pageNumber);
+                  toc.push({title:item.title.trim().slice(0,110),page:pageNumber,
+                    blockId:pages[pageNumber-1].blocks[0]?.id||`p${pageNumber}-b0`});
+                }
+              }
+            }catch{/* Some outline destinations cannot be resolved. */}
+          }
+          if(depth<2 && item.items?.length)pending.push(...item.items.map(child=>({item:child,depth:depth+1})));
+        }
       }
-      current = "";
+    }catch{/* No usable PDF outline: keep headings from text. */}
+    const index=toc.length>=2 ? toc.sort((a,b)=>a.page-b.page) : autoToc;
+    const scanPages=pages.filter(p=>p.blocks.length===0).map(p=>p.page);
+    const twoColumnPages=cleaned.filter(p=>p.twoColumns).map(p=>p.page);
+    return {
+      version:1,totalPages:pages.length,wordCount,pages,toc:index,
+      analysis:{
+        scannedPages:scanPages,twoColumnPages,
+        tocSource:toc.length>=2?"pdf-outline":"detected-headings",
+        warnings:scanPages.length?["Một số trang không có văn bản trích xuất được. Dùng PDF gốc để kiểm tra hoặc xử lý OCR."]:[]
+      }
     };
-
-    const normalLineHeight = lines.length > 2
-      ? lines.slice(1).map((line, i) => Math.abs(lines[i].y - line.y)).filter(d => d > 2 && d < 45).sort((a,b) => a-b)
-      : [];
-    const medianGap = normalLineHeight[Math.floor(normalLineHeight.length / 2)] || 14;
-
-    for (const line of lines) {
-      line.parts.sort((a, b) => a.x - b.x);
-      let sentence = "";
-      let lastRight: number | null = null;
-      for (const part of line.parts) {
-        const gap = lastRight === null ? 0 : part.x - lastRight;
-        const spacer = lastRight !== null && gap > Math.max(2, part.fontSize * .19) && !sentence.endsWith(" ") ? " " : "";
-        sentence += spacer + part.text;
-        lastRight = part.x + part.width;
-      }
-      sentence = sentence.replace(/\s+/g, " ").trim();
-      if (!sentence) continue;
-      const heading = /^(chương|chapter|phần|part|mục)\s+([0-9ivxlcdm]+|[a-z])\b/i.test(sentence)
-        || (/^[A-ZÀ-Ỹ0-9\s:–—.-]{6,85}$/.test(sentence) && sentence.length < 75 && line.parts.some(p => p.fontSize > 13));
-      const gap = lastY === null ? 0 : lastY - line.y;
-      if (heading || gap > medianGap * 1.6 || current.length > 850 || (/[.!?]["”]?$/.test(current) && sentence.length < 75)) {
-        flush();
-      }
-      if (heading) {
-        current = sentence;
-        flush(true);
-      } else {
-        if (current.endsWith("-") && /^[\p{L}]/u.test(sentence)) current = current.slice(0, -1) + sentence;
-        else current += (current ? " " : "") + sentence;
-      }
-      lastY = line.y;
-    }
-    flush();
-    pages.push({ page: number, blocks });
-    onProgress?.(number, pdf.numPages);
-  }
-  await pdf.destroy();
-  // Some books have no recognized chapter headings. Page navigation still works.
-  return { version: 1, totalPages: pages.length, wordCount, pages, toc };
+  }finally{await pdf.destroy();}
 }

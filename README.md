@@ -155,3 +155,16 @@ Nên tự lưu ZIP ở chỗ an toàn vì xóa dữ liệu trình duyệt có th
 Mỗi bản sao lưu hỗ trợ PDF tối đa 50MB, ZIP nhập lại không quá 100MB.
 
 **Lưu ý:** tính năng sao lưu ZIP này dành cho `/demo`, không tự chuyển dữ liệu sang Supabase. Sau khi cấu hình cloud, dùng thư viện chính tại `/`.
+
+## PDF → ebook: xử lý cấu trúc v2
+
+Các file upload mới sẽ được phân tích thêm:
+- Ưu tiên mục lục PDF có sẵn (outline / bookmarks) nếu có đủ mục hợp lệ, giữ số trang gốc.
+- Thử phát hiện văn bản **hai cột** và sắp xếp thứ tự đọc từng cột, tránh trộn dòng hai bên.
+- Phân nhóm dòng thành đoạn, nối các từ bị ngắt bởi dấu gạch nối cuối dòng.
+- Loại các mẫu đầu/cuối trang lặp lại và số trang đơn giản ra khỏi bản ebook.
+- Ghi nhận các trang thiếu text để thông báo khi cần xem PDF gốc hoặc OCR.
+- Biểu tượng **bút chì cạnh Mục lục** mở trình chỉnh chương: thêm/xóa/đổi tên, đặt lại trang bắt đầu và lưu vào sách.
+- Trình chỉnh mục lục hoạt động ở `/demo` và với sách trên Supabase Storage sau khi đăng nhập. Không làm thay đổi các đoạn văn hoặc ghi chú đã lưu.
+
+**Giới hạn:** Các PDF đa cột phức tạp, hình ảnh, bảng biểu, footnote và sách scan chưa được chuyển đổi hoàn hảo. Phân tích layout là heuristic, bạn nên so lại PDF gốc. Các sách đã upload từ phiên bản trước không tự reprocess; có thể upload lại hoặc chỉnh mục lục thủ công để có cấu trúc tốt hơn.

@@ -25,6 +25,12 @@ export type BookDocument = {
   wordCount: number;
   pages: BookPage[];
   toc: BookChapter[];
+  analysis?: {
+    scannedPages: number[];
+    twoColumnPages: number[];
+    tocSource: "pdf-outline" | "detected-headings" | "manual";
+    warnings: string[];
+  };
 };
 export type ReaderNote = {
   id: string;

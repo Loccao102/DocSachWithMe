@@ -365,3 +365,27 @@ h1,h2,h3,p{margin-top:0}
 .demo-audio-controls{bottom:62px}
 .demo-hero-buttons{align-items:stretch}.demo-hero-buttons button{width:100%}
 }
+
+/* Structured ebook editor and PDF extraction diagnostics */
+.toc-editor-trigger{margin-left:auto;border:1px solid #d9e7d9;background:#edf5ec;color:#578362;width:29px;height:29px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.toc-editor-trigger:hover:not(:disabled){background:#dcefdc}
+.toc-overlay{z-index:30}
+.toc-modal{background:#fff;border-radius:18px;box-shadow:0 30px 80px #142a1d55;padding:26px;width:min(760px,95vw);max-height:90vh;overflow:auto;color:#314c3b}
+.toc-modal-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding-bottom:18px;border-bottom:1px solid #eaf0e8}
+.toc-modal-header h2{font:500 26px/1.25 var(--heading);margin:8px 0}
+.toc-modal-header p{font-size:12px;color:#84958a;line-height:1.65;margin:5px 0;max-width:590px}
+.toc-editor-list{display:grid;gap:10px;margin:19px 0 24px;max-height:47vh;overflow:auto;padding-right:5px}
+.toc-editor-row{display:flex;align-items:end;gap:8px;border:1px solid #edf0ec;border-radius:9px;padding:11px;background:#fafbf9}
+.toc-editor-index{font-weight:700;font-size:11px;color:#a0b3a4;padding-bottom:12px;width:23px;text-align:center}
+.toc-editor-row label{display:flex;flex-direction:column;gap:5px;font-size:10px;color:#8a9e8e;font-weight:700}
+.toc-editor-title{min-width:0;flex:1}
+.toc-editor-page{width:85px;flex-shrink:0}
+.toc-editor-row input{width:100%;min-width:0;border:1px solid #dce8dd;background:#fff;border-radius:7px;padding:9px;font-size:12px;outline-color:#91baa0;color:#345c45}
+.toc-editor-row>button{border:0;background:#eef3ed;color:#728f7a;width:28px;height:34px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.toc-editor-row>button:hover:not(:disabled){background:#dceadd;color:#4b7e5c}
+.toc-editor-row>button:last-child{color:#b66d68}
+.toc-editor-empty{display:flex;gap:12px;align-items:center;justify-content:center;flex-direction:column;min-height:120px;color:#96aa99;font-size:12px}
+.toc-modal-footer{border-top:1px solid #e9efe8;padding-top:17px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.toc-modal-footer>div{display:flex;align-items:center;gap:10px}
+.pdf-quality-tip{font-size:11px;line-height:1.65;color:#9b7d50;background:#fff7e9;border:1px solid #f0e2c7;border-radius:8px;padding:11px;margin:17px 4px}
+@media(max-width:600px){.toc-modal{padding:18px}.toc-editor-row{gap:5px;padding:7px}.toc-editor-index{display:none}.toc-editor-page{width:62px}.toc-editor-row>button{width:23px}.toc-modal-footer{flex-direction:column;align-items:stretch}.toc-modal-footer>div{justify-content:flex-end}}
