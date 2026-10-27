@@ -15,7 +15,9 @@ export async function extractPdf(
       const page=await pdf.getPage(pageNumber);
       const content=await page.getTextContent();
       const viewport=page.getViewport({scale:1});
-      const positioned:PdfFragment[]=content.items.filter(item=>"str" in item && item.str.trim().length>0).map(item=>({
+      const positioned:PdfFragment[]=content.items
+        .filter((item): item is typeof item & {str:string;transform:number[];width:number} => "str" in item && typeof item.str==="string" && item.str.trim().length>0 && "transform" in item && "width" in item)
+        .map(item=>({
         text:item.str,x:item.transform[4],y:item.transform[5],width:item.width,
         fontSize:Math.max(1,Math.hypot(item.transform[2],item.transform[3]))
       }));
