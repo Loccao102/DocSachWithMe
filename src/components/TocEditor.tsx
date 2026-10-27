@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowDown, ArrowUp, BookOpen, Check, ListPlus, Pencil, Trash2, X } from "lucide-react";
+import { BookOpen, Check, ListPlus, Trash2, X } from "lucide-react";
 import type { BookChapter, BookDocument } from "@/lib/types";
 
 type Props = {
@@ -24,13 +24,6 @@ export default function TocEditor({document,onSave,onClose}:Props){
   const add = () => setEntries(prev=>[...prev,{title:"Chương mới",page:1,blockId:document.pages[0]?.blocks[0]?.id||"p1-b0"}]);
   const update = (index:number,patch:Partial<BookChapter>)=>setEntries(prev=>prev.map((entry,i)=>i===index?{...entry,...patch}:entry));
   const remove = (index:number)=>setEntries(prev=>prev.filter((_,i)=>i!==index));
-  const move = (index:number,direction:number)=>setEntries(prev=>{
-    const result=prev.slice(),destination=index+direction;
-    if(destination<0||destination>=result.length)return prev;
-    [result[index],result[destination]]=[result[destination],result[index]];
-    return result;
-  });
-
   const save=async()=>{
     if(entries.length>150){setError("Mục lục chỉ hỗ trợ tối đa 150 mục.");return;}
     const normalized=entries.map(entry=>cleanChapter(entry.title,Number(entry.page),document));
@@ -51,15 +44,13 @@ export default function TocEditor({document,onSave,onClose}:Props){
 
   return <div className="modal-overlay toc-overlay" onMouseDown={event=>{if(event.target===event.currentTarget&&!working)onClose()}}>
     <div className="toc-modal" role="dialog" aria-modal="true" aria-labelledby="toc-title">
-      <div className="toc-modal-header"><div><span className="eyebrow">BOOK STRUCTURE</span><h2 id="toc-title">Chỉnh sửa mục lục</h2><p>Đặt lại tên và trang bắt đầu của từng chương theo PDF gốc. Không thay đổi nội dung, highlight hoặc ghi chú.</p></div>
+      <div className="toc-modal-header"><div><span className="eyebrow">BOOK STRUCTURE</span><h2 id="toc-title">Chỉnh sửa mục lục</h2><p>Đặt lại tên và trang bắt đầu của từng chương theo PDF gốc. Các mục được sắp theo số trang khi lưu; highlight và ghi chú vẫn giữ nguyên.</p></div>
       <button aria-label="Đóng" className="icon-button" disabled={working} onClick={onClose}><X size={19}/></button></div>
       <div className="toc-editor-list">
         {entries.length?entries.map((entry,index)=><div className="toc-editor-row" key={index}>
           <span className="toc-editor-index">{String(index+1).padStart(2,"0")}</span>
           <label className="toc-editor-title"><span>Tên chương</span><input maxLength={110} value={entry.title} onChange={e=>update(index,{title:e.target.value})} disabled={working} aria-label={`Tên chương ${index+1}`}/></label>
           <label className="toc-editor-page"><span>Trang PDF</span><input type="number" min={1} max={document.totalPages} value={entry.page} onChange={e=>update(index,{page:e.target.value===""?0:Number(e.target.value)})} disabled={working} aria-label={`Trang chương ${index+1}`}/></label>
-          <button title="Đưa lên" disabled={working||index===0} onClick={()=>move(index,-1)}><ArrowUp size={15}/></button>
-          <button title="Đưa xuống" disabled={working||index===entries.length-1} onClick={()=>move(index,1)}><ArrowDown size={15}/></button>
           <button title="Xóa mục này" disabled={working} onClick={()=>remove(index)}><Trash2 size={15}/></button>
         </div>):<div className="toc-editor-empty"><BookOpen size={22}/><p>Chưa có mục lục. Thêm chương để sách dễ điều hướng hơn.</p></div>}
       </div>
