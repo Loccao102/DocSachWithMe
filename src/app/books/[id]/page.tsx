@@ -5,13 +5,14 @@ import type { User } from "@supabase/supabase-js";
 import {
   ArrowLeft, ArrowRight, BookHeart, BookMarked, BookOpen, Bookmark,
   Check, ChevronDown, ChevronLeft, ChevronRight, FileText, Highlighter,
-  List, LoaderCircle, Menu, MessageCircle, Minus, Moon, Search, Focus, Download, Copy, PanelRightClose,
+  List, LoaderCircle, Menu, MessageCircle, Minus, Moon, Search, Focus, Download, Copy, Volume2, Pause, Play, Square, PanelRightClose,
   PanelRightOpen, Plus, Send, Settings2, Sparkles, StickyNote, Sun, Trash2, X
 } from "lucide-react";
 import { AuthGate } from "@/components/AuthGate";
 import { requireSupabase } from "@/lib/supabase";
 import type { Book, BookBlock, BookDocument, ReaderBookmark, ReaderNote, ReadingProgress } from "@/lib/types";
 import { downloadNotesMarkdown } from "@/lib/export";
+import { useReadAloud } from "@/hooks/useReadAloud";
 
 type Panel = "notes" | "ai";
 type Theme = "cream" | "white" | "dark";
@@ -71,9 +72,12 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
   const [asking,setAsking]=useState(false);
   const [aiError,setAiError]=useState("");
   const [finished,setFinished]=useState(false);
+  const [jumpInput,setJumpInput]=useState("1");
+  const tts=useReadAloud();
   const scrollRef=useRef<HTMLDivElement>(null);
   const saveTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
   const chatEndRef=useRef<HTMLDivElement>(null);
+  const restoreBlockRef=useRef<string|null>(null);
   const searchInputRef=useRef<HTMLInputElement>(null);
 
   useEffect(()=>{
@@ -119,6 +123,8 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
         const currentProgress=progress as ReadingProgress|null;
         setPage(currentProgress?.page||1);
         setActiveBlock(currentProgress?.block_id||"");
+        setJumpInput(String(currentProgress?.page||1));
+        restoreBlockRef.current=currentProgress?.block_id||null;
         setFinished((currentProgress?.percent||0)>=100);
         if (!parsed || !parsed.wordCount) setView("original");
         client.from("books").update({last_opened_at:new Date().toISOString()}).eq("id",bookId).then(()=>{});
@@ -155,6 +161,23 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
   },[documentData,searchTerm]);
   const totalPages=book?.total_pages||documentData?.totalPages||0;
   const percent=finished?100:totalPages?Math.min(99,Math.round((page-1)/totalPages*100)):0;
+  useEffect(()=>setJumpInput(String(page)),[page]);
+  useEffect(()=>{
+    if(loading || view!=="reflow" || !documentData || !restoreBlockRef.current)return;
+    const blockId=restoreBlockRef.current;
+    const timer=window.setTimeout(()=>{
+      document.getElementById(blockId)?.scrollIntoView({block:"center"});
+      restoreBlockRef.current=null;
+    },180);
+    return ()=>window.clearTimeout(timer);
+  },[loading,documentData,view]);
+  useEffect(()=>{
+    if(tts.activeId && view==="reflow") document.getElementById(tts.activeId)?.scrollIntoView({behavior:"smooth",block:"center"});
+  },[tts.activeId,view]);
+  const speakPage=()=>{
+    const blocks=documentData?.pages.find(item=>item.page===page)?.blocks||[];
+    tts.play(blocks.map(block=>({id:block.id,text:block.text})));
+  };
 
   const persist=useCallback((newPage:number,blockId:string,done=false)=>{
     if(saveTimer.current)clearTimeout(saveTimer.current);
@@ -169,9 +192,10 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
   },[bookId,book?.total_pages,user.id]);
 
   function navigateTo(target:number,blockId?:string) {
+    tts.stop();
     if(!documentData)return;
     const safe=Math.max(1,Math.min(documentData.totalPages,target));
-    setPage(safe);setActiveBlock(blockId||`p${safe}-b0`);
+    setPage(safe);setJumpInput(String(safe));setActiveBlock(blockId||`p${safe}-b0`);
     persist(safe,blockId||`p${safe}-b0`);
     window.setTimeout(()=>{
       if(blockId) document.getElementById(blockId)?.scrollIntoView({behavior:"smooth",block:"center"});
@@ -321,6 +345,7 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
       <div className="reader-top-right">
         <button className="icon-button" title="Tìm trong sách (/)" disabled={!documentData?.wordCount} onClick={()=>{setSearchOpen(true);setFocusMode(false)}}><Search size={19}/></button>
         <button className="icon-button" title="Chế độ tập trung (F)" onClick={()=>setFocusMode(!focusMode)}><Focus size={19}/></button>
+        <button className="icon-button" title="Nghe đọc trang hiện tại" disabled={!documentData?.wordCount || !tts.available} onClick={()=>tts.state==="idle"?speakPage():tts.pauseOrResume()}>{tts.state==="playing"?<Pause size={18}/>:<Volume2 size={19}/>}</button>
         <button className={`icon-button ${activeBookmark?"is-bookmarked":""}`} title="Đánh dấu trang" onClick={toggleBookmark}><Bookmark size={19} fill={activeBookmark?"currentColor":"none"}/></button>
         <div className="settings-wrap"><button className="icon-button" title="Cài đặt đọc sách" onClick={()=>setSettingsOpen(!settingsOpen)}><Settings2 size={19}/></button>
           {settingsOpen && <div className="settings-popover"><div className="settings-title"><strong>Tùy chỉnh trải nghiệm đọc</strong><button className="icon-button small" onClick={()=>setSettingsOpen(false)}><X size={16}/></button></div>
@@ -347,7 +372,7 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
       </aside>}
       <main className="reader-content" ref={scrollRef}>
         {searchOpen && <div className="book-search"><div className="book-search-head"><Search size={18}/><input ref={searchInputRef} value={searchTerm} onChange={event=>setSearchTerm(event.target.value)} placeholder="Tìm câu, từ khóa trong sách…" aria-label="Tìm trong sách"/><button className="icon-button small" aria-label="Đóng tìm kiếm" onClick={()=>setSearchOpen(false)}><X size={17}/></button></div><div className="book-search-results">{searchTerm.trim().length<2?<p>Nhập ít nhất 2 ký tự để tìm trên toàn bộ sách.</p>:!searchResults.length?<p>Không tìm thấy đoạn văn phù hợp.</p>:<><span className="book-search-count">{searchResults.length >= 150?"150+ kết quả":`${searchResults.length} kết quả`}</span>{searchResults.map(result=><button key={result.blockId} onClick={()=>{setView("reflow");setSearchOpen(false);navigateTo(result.page,result.blockId)}}><span>Trang {result.page}</span><p>{result.preview}</p></button>)}</>}</div></div>}
-        {view==="original" ? <div className="original-reader"><div className="original-notice"><FileText size={16}/> Đang xem bản PDF gốc. Chuyển sang Sách điện tử để thay đổi cỡ chữ và highlight.</div><iframe src={pdfUrl} title={book.title} className="pdf-iframe"/></div> :
+        {view==="original" ? <div className="original-reader"><div className="original-notice"><FileText size={16}/> Đang xem bản PDF gốc. Chuyển sang Sách điện tử để thay đổi cỡ chữ và highlight.</div><iframe src={`${pdfUrl}#page=${page}`} title={book.title} className="pdf-iframe"/></div> :
           <div className="reflow-container" onMouseUp={captureSelection}>
             <div className="reflow-overline">DOCSACHWITHME <span>✳</span> READING EDITION</div>
             <div className="chapter-top"><span className="eyebrow">PHẦN {(sectionIndex+1).toString().padStart(2,"0")} / {sections.length.toString().padStart(2,"0")}</span>
@@ -356,8 +381,8 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
             <article className="reader-article" style={{fontSize:`${fontSize}px`,lineHeight}}>
               {visiblePages.map(currentPage=><section key={currentPage.page} className="reflow-page">
                 {currentPage.blocks.map(block=>block.kind==="heading"
-                  ? <h2 key={block.id} id={block.id} className="reading-paragraph reading-heading" data-block-id={block.id} data-page={block.page}>{renderText(block)}</h2>
-                  : <p key={block.id} id={block.id} className="reading-paragraph" data-block-id={block.id} data-page={block.page}>{renderText(block)}</p>)}
+                  ? <h2 key={block.id} id={block.id} className={`reading-paragraph reading-heading ${tts.activeId===block.id?"reading-audio-active":""}`} data-block-id={block.id} data-page={block.page}>{renderText(block)}</h2>
+                  : <p key={block.id} id={block.id} className={`reading-paragraph ${tts.activeId===block.id?"reading-audio-active":""}`} data-block-id={block.id} data-page={block.page}>{renderText(block)}</p>)}
                 {currentPage.blocks.length>0 && <div className="pdf-page-label">TRANG GỐC {currentPage.page}</div>}
               </section>)}
             </article>
@@ -369,6 +394,22 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
             </div>
           </div>}
       </main>
+      <div className="reader-bottom-controls">
+        <button aria-label="Trang trước" disabled={!documentData || page<=1} onClick={()=>navigateTo(page-1)}><ChevronLeft size={17}/></button>
+        <span>Trang</span>
+        <input type="number" min={1} max={totalPages||undefined} value={jumpInput} aria-label="Chuyển đến trang" onChange={e=>setJumpInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")navigateTo(Number(jumpInput)||1)}} onBlur={()=>setJumpInput(String(page))} />
+        <span>/ {totalPages||"?"}</span>
+        <button aria-label="Trang tiếp" disabled={!documentData || page>=totalPages} onClick={()=>navigateTo(page+1)}><ChevronRight size={17}/></button>
+        <span className="bottom-progress">{percent}%</span>
+      </div>
+      {tts.state!=="idle" && <div className="read-aloud-controls">
+        <Volume2 size={17}/><span>Đang đọc trang {page}</span>
+        <select value={tts.speed} onChange={e=>tts.updateSpeed(Number(e.target.value))} aria-label="Tốc độ đọc">
+          <option value={0.8}>0.8×</option><option value={1}>1×</option><option value={1.2}>1.2×</option><option value={1.5}>1.5×</option>
+        </select>
+        <button title={tts.state==="playing"?"Tạm dừng":"Tiếp tục"} onClick={tts.pauseOrResume}>{tts.state==="playing"?<Pause size={17}/>:<Play size={17}/>}</button>
+        <button title="Dừng đọc" onClick={tts.stop}><Square size={16}/></button>
+      </div>}
       {rightOpen && <aside className="reader-right">
         <div className="right-panel-tabs"><button className={panel==="notes"?"active":""} onClick={()=>setPanel("notes")}><StickyNote size={16}/> Ghi chú</button><button className={panel==="ai"?"active":""} onClick={()=>setPanel("ai")}><Sparkles size={16}/> Bạn đọc AI</button><button className="icon-button small" title="Đóng" onClick={()=>setRightOpen(false)}><X size={16}/></button></div>
         {panel==="notes" ? <div className="notes-pane">

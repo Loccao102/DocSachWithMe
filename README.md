@@ -127,3 +127,31 @@ Dữ liệu ở `/demo` **không đồng bộ** với tài khoản cloud và có
 - Ghi nhớ chủ đề, cỡ chữ và giãn dòng trên trình duyệt.
 - Xuất ghi chú, trích đoạn và bookmark thành Markdown.
 - Sao chép đoạn văn được chọn.
+
+## Bổ sung: nghe đọc, nhảy trang và sao lưu sách
+
+### Nghe đọc bằng giọng trình duyệt
+
+Trong Reader cloud và `/demo`, bấm biểu tượng **loa** để đọc nội dung văn bản của trang hiện tại.
+Có thể **tạm dừng/tiếp tục**, **dừng hẳn** và chỉnh tốc độ `0.8× – 1.5×`. Đoạn đang được đọc được đánh dấu trong ebook.
+Chức năng dùng Web Speech API tích hợp sẵn, không tốn OpenAI token; giọng đọc và hỗ trợ tiếng Việt phụ thuộc trình duyệt/hệ điều hành. Không dùng được với PDF scan chưa trích xuất văn bản.
+
+### Chuyển tới trang cụ thể
+
+Reader cloud có thanh chuyển trang trực tiếp; `/demo` có ô nhập số trang ở thanh công cụ dưới.
+Nhập số trang và nhấn **Enter** hoặc dùng nút trước/sau. Số trang tính theo PDF gốc (khác trang in ở đầu sách).
+Chế độ ebook và PDF gốc có thể chuyển qua lại.
+
+### Sao lưu dữ liệu /demo mà không cần cloud
+
+Ở danh sách sách `/demo`, bấm biểu tượng **tải xuống** trên bìa sách để xuất file `.dswm.zip` chứa:
+
+- PDF gốc.
+- Văn bản đã trích xuất / metadata.
+- Trang đang đọc, highlight, bookmark và ghi chú.
+
+Dùng nút **Khôi phục sao lưu** để tải lại ZIP trên máy khác. Nhập lại sẽ tạo bản sao sách mới, không ghi đè bản đã có.
+Nên tự lưu ZIP ở chỗ an toàn vì xóa dữ liệu trình duyệt có thể làm mất thư viện local.
+Mỗi bản sao lưu hỗ trợ PDF tối đa 50MB, ZIP nhập lại không quá 100MB.
+
+**Lưu ý:** tính năng sao lưu ZIP này dành cho `/demo`, không tự chuyển dữ liệu sang Supabase. Sau khi cấu hình cloud, dùng thư viện chính tại `/`.

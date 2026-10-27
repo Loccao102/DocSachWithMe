@@ -3,9 +3,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft, ArrowRight, BookHeart, BookOpen, Bookmark, Check, ChevronLeft, ChevronRight,
   Cloud, Download, FileText, Focus, Highlighter, LibraryBig, List, LoaderCircle,
-  Menu, Minus, Moon, Plus, Search, Settings2, StickyNote, Sun, Trash2, UploadCloud, X
+  Menu, Minus, Moon, Plus, Search, Settings2, StickyNote, Sun, Trash2, UploadCloud, Volume2, Pause, Play, Square, X
 } from "lucide-react";
 import { extractPdf } from "@/lib/pdf";
+import { useReadAloud } from "@/hooks/useReadAloud";
+import { exportDemoBackup, importDemoBackup } from "@/lib/backup";
 import { deleteDemoBook, getDemoBook, listDemoBooks, saveDemoBook, type DemoBook, type DemoNote } from "@/lib/demo-store";
 import type { BookBlock } from "@/lib/types";
 
@@ -33,6 +35,8 @@ function DemoApp(){
   const [uploadLabel,setUploadLabel]=useState("");
   const [message,setMessage]=useState("");
   const [page,setPage]=useState(1);
+  const [jumpInput,setJumpInput]=useState("1");
+  const tts=useReadAloud();
   const [theme,setTheme]=useState<ReaderTheme>("cream");
   const [fontSize,setFontSize]=useState(19);
   const [lineHeight,setLineHeight]=useState(1.85);
@@ -46,6 +50,9 @@ function DemoApp(){
   const [draft,setDraft]=useState("");
   const [editingId,setEditingId]=useState<string|null>(null);
   const fileRef=useRef<HTMLInputElement>(null);
+  const restoreRef=useRef<HTMLInputElement>(null);
+  const [restoring,setRestoring]=useState(false);
+  const [exportingId,setExportingId]=useState<string|null>(null);
   const readerRef=useRef<HTMLElement>(null);
   const activeRef=useRef<DemoBook|null>(null);
   const pdfUrl=useMemo(()=>current?.pdf?URL.createObjectURL(current.pdf):"",[current?.id,current?.pdf]);
@@ -78,6 +85,10 @@ function DemoApp(){
     window.addEventListener("keydown",listener);return()=>window.removeEventListener("keydown",listener);
   });
   const blocks=useMemo(()=>current?.document?.pages.find(p=>p.page===page)?.blocks||[],[current,page]);
+  useEffect(()=>setJumpInput(String(page)),[page]);
+  useEffect(()=>{
+    if(tts.activeId && view==="reflow")document.getElementById("demo-"+tts.activeId)?.scrollIntoView({behavior:"smooth",block:"center"});
+  },[tts.activeId,view]);
   const searchMatches=useMemo(()=>{
     if(!current?.document||search.trim().length<2)return [];
     const q=search.toLocaleLowerCase("vi");const matches:{page:number;blockId:string;preview:string}[]=[];
@@ -90,13 +101,15 @@ function DemoApp(){
   },[search,current?.document]);
   function turnTo(value:number,blockId?:string){
     if(!current)return;
+    tts.stop();
     const max=current.document?.totalPages||Math.max(page,1);
     const target=Math.min(Math.max(1,value),max);
-    setPage(target);setCurrent({...current,page:target});
+    setPage(target);setJumpInput(String(target));setCurrent({...current,page:target});
     readerRef.current?.scrollTo({top:0,behavior:"smooth"});
     if(blockId)setTimeout(()=>document.getElementById("demo-"+blockId)?.scrollIntoView({behavior:"smooth",block:"center"}),80);
   }
   function openBook(book:DemoBook){
+    tts.stop();
     setCurrent(book);activeRef.current=book;setPage(book.page||1);setRightOpen(false);setSearch("");setSearchOpen(false);setFocus(false);setLeftOpen(window.innerWidth>=800);
     setView(book.document?.wordCount?"reflow":"original");
   }
@@ -116,12 +129,29 @@ function DemoApp(){
     }catch(error){setMessage(error instanceof Error?error.message:"Không đọc được PDF. Vui lòng thử lại.");}
     finally{setUploading(false);setUploadLabel("");if(fileRef.current)fileRef.current.value="";}
   }
+  async function saveBackup(book:DemoBook){
+    setMessage("");setExportingId(book.id);
+    try{await exportDemoBackup(book);}catch(error){setMessage(error instanceof Error?error.message:"Không thể tạo bản sao lưu.");}
+    finally{setExportingId(null);}
+  }
+  async function restoreBackup(file:File|undefined){
+    if(!file)return;
+    setRestoring(true);setMessage("");
+    try{
+      const book=await importDemoBackup(file);
+      await saveDemoBook(book);
+      setBooks(previous=>[book,...previous]);
+      setMessage("Đã khôi phục sách, highlight, ghi chú và tiến độ đọc từ bản sao lưu.");
+    }catch(error){setMessage(error instanceof Error?error.message:"Không thể khôi phục bản sao lưu.");}
+    finally{setRestoring(false);if(restoreRef.current)restoreRef.current.value="";}
+  }
   async function removeBook(book:DemoBook){
     if(!confirm(`Xóa “${book.title}” khỏi bộ nhớ trình duyệt này?`))return;
     try{await deleteDemoBook(book.id);setBooks(previous=>previous.filter(item=>item.id!==book.id));}
     catch{setMessage("Không thể xóa sách lúc này.");}
   }
   function goBack(){
+    tts.stop();
     if(current){saveDemoBook(current).catch(()=>{});setBooks(previous=>previous.map(book=>book.id===current.id?current:book));}
     setCurrent(null);setSelection(null);setFocus(false);
   }
@@ -163,15 +193,22 @@ function DemoApp(){
   if(!current)return <div className="demo-home">
     <header className="demo-home-nav"><div className="brand"><span className="brand-symbol"><BookHeart size={22}/></span>DocSach<span className="brand-light">WithMe</span></div><span className="demo-badge">LOCAL PREVIEW</span></header>
     <main className="demo-home-main"><div className="demo-home-hero"><span className="eyebrow">YOUR READING STUDIO</span><h1>Đọc sâu hơn. <em>Ghi nhớ lâu hơn.</em></h1><p>Thử ngay trình đọc ebook, highlight và ghi chú mà không cần tài khoản. Sách của bạn chỉ nằm trên thiết bị này.</p>
-      <button className="primary-button" disabled={uploading} onClick={()=>fileRef.current?.click()}><UploadCloud size={18}/>{uploading?uploadLabel:"Thêm sách PDF"}</button>
+      <div className="demo-hero-buttons">
+        <button className="primary-button" disabled={uploading||restoring} onClick={()=>fileRef.current?.click()}><UploadCloud size={18}/>{uploading?uploadLabel:"Thêm sách PDF"}</button>
+        <button className="outline-button" disabled={restoring||uploading} onClick={()=>restoreRef.current?.click()}><Download size={17}/>{restoring?"Đang khôi phục…":"Khôi phục sao lưu"}</button>
+      </div>
+      <input type="file" accept=".zip,.dswm.zip,application/zip" hidden ref={restoreRef} onChange={e=>restoreBackup(e.target.files?.[0])}/>
       <input type="file" accept=".pdf,application/pdf" hidden ref={fileRef} onChange={e=>onFile(e.target.files?.[0])}/></div>
       {message&&<p className="error-banner">{message}</p>}
       <div className="demo-library-title"><h2>Kệ sách trên thiết bị</h2><span>{books.length} cuốn</span></div>
       {books.length?<div className="demo-books">{books.map((book,index)=><div className="demo-book" key={book.id}>
         <button className="demo-book-action" onClick={()=>openBook(book)}><div className="demo-book-cover" style={{background:colors[index%colors.length]}}><BookOpen size={30}/><span>{book.title}</span><small>DOCSACHWITHME</small></div><strong>{book.title}</strong><small>{book.document?.totalPages||"PDF"} trang · đang ở trang {book.page||1}</small></button>
-        <button className="demo-trash" title="Xóa sách" onClick={()=>removeBook(book)}><Trash2 size={15}/></button>
+        <div className="demo-book-actions">
+          <button title="Sao lưu cả PDF, tiến độ, highlight và ghi chú" disabled={exportingId===book.id} onClick={()=>saveBackup(book)}><Download size={16}/></button>
+          <button title="Xóa sách khỏi thiết bị" onClick={()=>removeBook(book)}><Trash2 size={16}/></button>
+        </div>
       </div>)}</div>:<div className="demo-empty"><BookOpen size={32}/><h3>Kệ sách đang trống</h3><p>Hãy thêm một cuốn PDF để bắt đầu đọc.</p></div>}
-      <p className="demo-privacy"><Cloud size={15}/> Đây là bản thử tại trình duyệt, không tự động đồng bộ cloud. Khi cấu hình Supabase, hãy dùng trang thư viện chính để lưu sách online.</p>
+      <p className="demo-privacy"><Cloud size={15}/> Bản thử lưu trên trình duyệt và không đồng bộ cloud. Hãy tải bản sao lưu ZIP để chuyển sách và ghi chú sang thiết bị khác hoặc phòng khi xóa dữ liệu trình duyệt.</p>
     </main>
   </div>;
 
@@ -182,6 +219,7 @@ function DemoApp(){
       <div className="reader-top-right">
         <button className="icon-button" title="Tìm từ trong sách (/)" onClick={()=>{setSearchOpen(true);setFocus(false)}} disabled={!current.document?.wordCount}><Search size={18}/></button>
         <button className="icon-button" title="Tập trung (F)" onClick={()=>setFocus(!focus)}><Focus size={18}/></button>
+        <button className="icon-button" title="Nghe đọc trang hiện tại" disabled={!current.document?.wordCount || !tts.available} onClick={()=>tts.state==="idle"?tts.play(blocks.map(block=>({id:block.id,text:block.text}))):tts.pauseOrResume()}>{tts.state==="playing"?<Pause size={18}/>:<Volume2 size={18}/>}</button>
         <button className={`icon-button ${current.bookmarks.includes(page)?"is-bookmarked":""}`} title="Đánh dấu trang" onClick={()=>setCurrent({...current,bookmarks:current.bookmarks.includes(page)?current.bookmarks.filter(n=>n!==page):[...current.bookmarks,page]})}><Bookmark size={18} fill={current.bookmarks.includes(page)?"currentColor":"none"}/></button>
         <button className="icon-button" title="Ghi chú" onClick={()=>setRightOpen(!rightOpen)}><StickyNote size={18}/></button>
       </div>
@@ -203,7 +241,7 @@ function DemoApp(){
           <div className="reflow-overline">DOCSACHWITHME <span>✳</span> YOUR PRIVATE READING EDITION</div>
           <div className="chapter-top"><span className="eyebrow">TRANG {String(page).padStart(2,"0")} / {current.document?.totalPages||"?"}</span><h1>{toc.find(item=>item.page<=page)?.title||current.title}</h1><div className="chapter-deco"><span/>✦<span/></div></div>
           <article className="reader-article" style={{fontSize:`${fontSize}px`,lineHeight}}>
-            {blocks.length?blocks.map(block=>block.kind==="heading"?<h2 className="reading-heading" id={"demo-"+block.id} key={block.id} data-demo-block={block.id}>{renderText(block)}</h2>:<p className="reading-paragraph" id={"demo-"+block.id} key={block.id} data-demo-block={block.id}>{renderText(block)}</p>):<div className="demo-empty-page"><FileText size={26}/><p>Trang này không có văn bản được trích xuất. Hãy chuyển sang PDF gốc để xem đầy đủ.</p></div>}
+            {blocks.length?blocks.map(block=>block.kind==="heading"?<h2 className={`reading-heading ${tts.activeId===block.id?"reading-audio-active":""}`} id={"demo-"+block.id} key={block.id} data-demo-block={block.id}>{renderText(block)}</h2>:<p className={`reading-paragraph ${tts.activeId===block.id?"reading-audio-active":""}`} id={"demo-"+block.id} key={block.id} data-demo-block={block.id}>{renderText(block)}</p>):<div className="demo-empty-page"><FileText size={26}/><p>Trang này không có văn bản được trích xuất. Hãy chuyển sang PDF gốc để xem đầy đủ.</p></div>}
           </article>
           <div className="chapter-end"><div>✳</div><span>Trang {page}</span><div className="chapter-navigation"><button className="outline-button" disabled={page<=1} onClick={()=>turnTo(page-1)}><ChevronLeft size={16}/> Trang trước</button><button className="primary-button" disabled={page>=(current.document?.totalPages||1)} onClick={()=>turnTo(page+1)}>Trang tiếp <ChevronRight size={16}/></button></div></div>
         </div>}
@@ -219,9 +257,10 @@ function DemoApp(){
         </div>
       </aside>}
     </div>
-    <div className="demo-bottom-bar"><div className="demo-bottom-counter"><button disabled={page<=1} onClick={()=>turnTo(page-1)}><ChevronLeft size={18}/></button><span>Trang {page} / {current.document?.totalPages||"?"}</span><button disabled={page>=(current.document?.totalPages||1)} onClick={()=>turnTo(page+1)}><ChevronRight size={18}/></button></div>
+    <div className="demo-bottom-bar"><div className="demo-bottom-counter"><button disabled={page<=1} onClick={()=>turnTo(page-1)}><ChevronLeft size={18}/></button><span>Trang</span><input type="number" min={1} max={current.document?.totalPages||undefined} aria-label="Nhập số trang" value={jumpInput} onChange={event=>setJumpInput(event.target.value)} onKeyDown={event=>{if(event.key==="Enter")turnTo(Number(jumpInput)||1)}} onBlur={()=>setJumpInput(String(page))}/><span>/ {current.document?.totalPages||"?"}</span><button disabled={page>=(current.document?.totalPages||1)} onClick={()=>turnTo(page+1)}><ChevronRight size={18}/></button></div>
       <div className="demo-settings"><button title="Giảm cỡ chữ" onClick={()=>setFontSize(Math.max(15,fontSize-1))}><Minus size={14}/></button><span>{fontSize}px</span><button title="Tăng cỡ chữ" onClick={()=>setFontSize(Math.min(28,fontSize+1))}><Plus size={14}/></button><button title="Đổi màu nền" onClick={()=>setTheme(theme==="cream"?"white":theme==="white"?"dark":"cream")}>{theme==="dark"?<Moon size={17}/>:<Sun size={17}/>}</button><button title="Giãn dòng" onClick={()=>setLineHeight(lineHeight>2.1?1.5:lineHeight+.2)}><Settings2 size={17}/></button></div>
     </div>
+    {tts.state!=="idle"&&<div className="read-aloud-controls demo-audio-controls"><Volume2 size={17}/><span>Nghe trang {page}</span><select aria-label="Tốc độ đọc" value={tts.speed} onChange={e=>tts.updateSpeed(Number(e.target.value))}><option value={0.8}>0.8×</option><option value={1}>1×</option><option value={1.2}>1.2×</option><option value={1.5}>1.5×</option></select><button onClick={tts.pauseOrResume} title="Tạm dừng hoặc tiếp tục">{tts.state==="playing"?<Pause size={17}/>:<Play size={17}/>}</button><button onClick={tts.stop} title="Dừng đọc"><Square size={16}/></button></div>}
     {selection&&<div className="selection-toolbar"><span><Highlighter size={15}/> Highlight</span>{(["yellow","green","pink"] as const).map(color=><button key={color} title={color} className={`color-dot ${color}`} onClick={()=>highlight(color)}/>)}<button onClick={()=>setSelection(null)}><X size={15}/></button></div>}
   </div>;
 }
