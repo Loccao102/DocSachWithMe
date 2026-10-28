@@ -27,3 +27,17 @@ function transact<T>(mode:IDBTransactionMode,fn:(store:IDBObjectStore)=>IDBReque
 export const listStudyCards=()=>transact<StudyCard[]>("readonly",s=>s.getAll());
 export const putStudyCard=(card:StudyCard)=>transact<IDBValidKey>("readwrite",s=>s.put(card));
 export const removeStudyCard=(id:string)=>transact<undefined>("readwrite",s=>s.delete(id));
+
+/** Write imported cards in a single IndexedDB transaction. */
+export async function putStudyCards(cards:StudyCard[]):Promise<void>{
+  if(!cards.length)return;
+  const database=await db();
+  return new Promise<void>((resolve,reject)=>{
+    const tx=database.transaction("cards","readwrite");
+    const store=tx.objectStore("cards");
+    for(const card of cards)store.put(card);
+    tx.oncomplete=()=>{database.close();resolve();};
+    tx.onerror=()=>{database.close();reject(tx.error);};
+    tx.onabort=()=>{database.close();reject(tx.error);};
+  });
+}

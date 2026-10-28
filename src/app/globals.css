@@ -649,3 +649,7 @@ h1,h2,h3,p{margin-top:0}
 .knowledge-review-buttons{grid-template-columns:repeat(2,1fr)}
 .knowledge-card-editor{padding:17px}
 }
+
+.knowledge-backup-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.knowledge-backup-actions .outline-button,.knowledge-backup-actions .primary-button{padding:11px 12px;font-size:11px}
+@media(max-width:530px){.knowledge-backup-actions{justify-content:flex-start}.knowledge-backup-actions button{flex:1}}

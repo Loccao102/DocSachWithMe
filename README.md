@@ -217,3 +217,9 @@ Mở `/knowledge` từ thư viện chính, `/demo` hoặc mục **Sổ tay** tr�
 Cụ thể, có thể dùng `/demo` → highlight → viết ghi chú → mở `/knowledge` → **Tạo flashcard** → ôn tập.
 
 Giới hạn: sổ tay từ sách local và Gutenberg chỉ xuất hiện trên **đúng trình duyệt/thiết bị** nơi đã lưu chúng. Trong tương lai có thể bổ sung sync và backup riêng cho flashcard. Đường dẫn tới đoạn sách trong bản EPUB/PDF được neo theo mã đoạn tại thời điểm import; nếu upload lại sách và hệ thống trích xuất khác, neo cũ có thể không còn tương ứng.
+
+### Sao lưu flashcard
+
+Trong tab **Flashcard & ôn tập** của `/knowledge`, dùng nút **Sao lưu** để tải file `docsachwithme-flashcards.json`; dùng **Khôi phục** để nhập lại ở một trình duyệt khác.
+
+Bản sao lưu giữ câu hỏi/đáp án, nguồn tham khảo, ngày ôn, số lần ôn và độ dễ. Khi khôi phục, thẻ được nhập thành bản sao mới để tránh ghi đè. Dữ liệu JSON tối đa 2MB, tối đa 5.000 thẻ/lần nhập. Đây là bản sao lưu flashcard riêng biệt; nó **không** chứa PDF, EPUB hoặc nội dung sách gốc.

@@ -1,18 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft, ArrowRight, BookHeart, BookOpen, Check, ChevronLeft, ChevronRight,
   ClipboardList, Download, FileText, Filter, GraduationCap, Layers3, LibraryBig,
-  LoaderCircle, NotebookPen, Plus, RefreshCcw, Search, Sparkles, Trash2, X
+  LoaderCircle, NotebookPen, Plus, RefreshCcw, Search, Sparkles, Trash2, Upload, X
 } from "lucide-react";
 import { configured, supabase } from "@/lib/supabase";
 import { listDemoBooks } from "@/lib/demo-store";
 import { listPublicBooks } from "@/lib/public-library";
 import { collectKnowledge, knowledgeToMarkdown, searchKnowledge, sourceLabels, type KnowledgeEntry, type KnowledgeSource } from "@/lib/knowledge";
 import { isCardDue, makeStudyCard, reviewStudyCard, type ReviewRating, type StudyCard } from "@/lib/flashcards";
-import { listStudyCards, putStudyCard, removeStudyCard } from "@/lib/study-store";
+import { listStudyCards, putStudyCard, putStudyCards, removeStudyCard } from "@/lib/study-store";
+import { parseStudyBackup, serializeStudyCards } from "@/lib/study-backup";
 import type { Book, ReaderNote } from "@/lib/types";
 
 type FilterSource="all"|KnowledgeSource;
@@ -41,6 +42,8 @@ export default function KnowledgePage(){
   const [reviewed,setReviewed]=useState(0);
   const [showAllCards,setShowAllCards]=useState(false);
   const [cardError,setCardError]=useState("");
+  const [importing,setImporting]=useState(false);
+  const importRef=useRef<HTMLInputElement>(null);
 
   const refresh=useCallback(async()=>{
     setLoading(true);setError("");
@@ -106,6 +109,29 @@ export default function KnowledgePage(){
       setReviewed(prev=>prev+1);setRevealed(false);setCardError("");
     }catch{setCardError("Chưa lưu được kết quả ôn tập. Vui lòng thử lại.");}
   }
+  function exportCards(){
+    if(!cards.length)return;
+    try{
+      const content=serializeStudyCards(cards);
+      const url=URL.createObjectURL(new Blob([content],{type:"application/json;charset=utf-8"}));
+      const link=document.createElement("a");
+      link.href=url;link.download="docsachwithme-flashcards.json";link.click();
+      window.setTimeout(()=>URL.revokeObjectURL(url),2000);
+    }catch(ex){setCardError(ex instanceof Error?ex.message:"Không thể sao lưu flashcard.");}
+  }
+  async function restoreCards(file:File|undefined){
+    if(!file)return;
+    setCardError("");setImporting(true);
+    try{
+      if(file.size>2*1024*1024)throw new Error("Bản sao lưu quá 2MB.");
+      const restored=parseStudyBackup(await file.text());
+      await putStudyCards(restored);
+      setCards(prev=>[...restored,...prev]);
+      setRevealed(false);
+      setReviewed(0);
+    }catch(ex){setCardError(ex instanceof Error?ex.message:"Không thể nhập flashcard.");}
+    finally{setImporting(false);if(importRef.current)importRef.current.value="";}
+  }
   async function deleteCard(card:StudyCard){
     if(!confirm("Xóa flashcard này?"))return;
     try{await removeStudyCard(card.id);setCards(prev=>prev.filter(c=>c.id!==card.id));}
@@ -153,7 +179,13 @@ export default function KnowledgePage(){
           <div className="knowledge-note-foot"><Link href={entry.url}>Về đoạn sách <ArrowRight size={15}/></Link><button onClick={()=>startCard(entry)}><Plus size={15}/> Tạo flashcard</button></div>
         </article>)}</div>:<div className="knowledge-empty"><NotebookPen size={33}/><h3>{search?"Không có ghi chú khớp tìm kiếm":"Sổ tay đang chờ những dòng đầu tiên"}</h3><p>Highlight một đoạn trong sách PDF/EPUB hoặc sách miễn phí; ghi chú sẽ xuất hiện ở đây.</p><div><Link href="/demo" className="outline-button">Đọc sách của tôi</Link><Link href="/discover" className="primary-button">Khám phá sách <ArrowRight size={16}/></Link></div></div>}
       </>:<>
-        <div className="knowledge-section-head"><div><span className="eyebrow">REMEMBER WHAT MATTERS</span><h2>Ôn tập bằng flashcard</h2></div><button className="primary-button" onClick={()=>startCard()}><Plus size={16}/> Tạo thẻ mới</button></div>
+        <div className="knowledge-section-head"><div><span className="eyebrow">REMEMBER WHAT MATTERS</span><h2>Ôn tập bằng flashcard</h2></div>
+          <div className="knowledge-backup-actions">
+            <button className="outline-button" disabled={!cards.length||importing} onClick={exportCards}><Download size={15}/> Sao lưu</button>
+            <button className="outline-button" disabled={importing} onClick={()=>importRef.current?.click()}><Upload size={15}/> {importing?"Đang nhập…":"Khôi phục"}</button>
+            <input type="file" ref={importRef} hidden accept=".json,application/json" onChange={e=>restoreCards(e.target.files?.[0])}/>
+            <button className="primary-button" onClick={()=>startCard()}><Plus size={16}/> Tạo thẻ</button>
+          </div></div>
         <p className="knowledge-study-intro">Tạo câu hỏi từ ghi chú của bạn và ôn lại theo lịch giãn cách. Các thẻ được lưu riêng trên trình duyệt; không cần AI API key.</p>
         {cardError&&<div role="alert" className="error-banner">{cardError}</div>}
         {editing?<form className="knowledge-card-editor" onSubmit={createCard}>
