@@ -6,6 +6,7 @@ import {
   Menu, Minus, Moon, Plus, Search, Globe2, Settings2, StickyNote, Sun, Trash2, UploadCloud, Volume2, Pause, Play, Square, Pencil, X
 } from "lucide-react";
 import { extractPdf } from "@/lib/pdf";
+import { extractEpub } from "@/lib/epub";
 import { useReadAloud } from "@/hooks/useReadAloud";
 import TocEditor from "@/components/TocEditor";
 import { exportDemoBackup, importDemoBackup } from "@/lib/backup";
@@ -57,7 +58,7 @@ function DemoApp(){
   const [exportingId,setExportingId]=useState<string|null>(null);
   const readerRef=useRef<HTMLElement>(null);
   const activeRef=useRef<DemoBook|null>(null);
-  const pdfUrl=useMemo(()=>current?.pdf?URL.createObjectURL(current.pdf):"",[current?.id,current?.pdf]);
+  const pdfUrl=useMemo(()=>current?.pdf && current.format!=="epub"?URL.createObjectURL(current.pdf):"",[current?.id,current?.pdf,current?.format]);
   useEffect(()=>()=>{if(pdfUrl)URL.revokeObjectURL(pdfUrl)},[pdfUrl]);
   useEffect(()=>{
     listDemoBooks().then(data=>setBooks(data.sort((a,b)=>b.createdAt.localeCompare(a.createdAt)))).catch(()=>setMessage("Không thể truy cập bộ nhớ trình duyệt. Hãy bật IndexedDB để dùng thử.")).finally(()=>setLoading(false));
@@ -113,18 +114,31 @@ function DemoApp(){
   function openBook(book:DemoBook){
     tts.stop();
     setCurrent(book);activeRef.current=book;setPage(book.page||1);setRightOpen(false);setSearch("");setSearchOpen(false);setFocus(false);setLeftOpen(window.innerWidth>=800);
-    setView(book.document?.wordCount?"reflow":"original");
+    setView(book.format==="epub"?"reflow":book.document?.wordCount?"reflow":"original");
   }
   async function onFile(file:File|undefined){
     if(!file)return;
-    if(!file.name.toLowerCase().endsWith(".pdf")||file.size>blobMax){setMessage("Chỉ hỗ trợ PDF tối đa 50MB.");return;}
+    const epub=file.name.toLowerCase().endsWith(".epub");
+    const pdf=file.name.toLowerCase().endsWith(".pdf");
+    if(!pdf&&!epub){setMessage("Chỉ hỗ trợ PDF hoặc EPUB.");return;}
+    if(file.size>(epub?35*1024*1024:blobMax)){setMessage(epub?"EPUB tối đa 35MB.":"PDF tối đa 50MB.");return;}
     setUploading(true);setMessage("");
     setUploadLabel("Đang đọc nội dung sách…");
     try{
       let parsed=null;
-      try{parsed=await extractPdf(file,(index,total)=>setUploadLabel(`Đang xử lý trang ${index}/${total}…`));}
-      catch(error){console.warn("Could not extract PDF text, using original view",error);}
-      const book:DemoBook={id:crypto.randomUUID(),title:file.name.replace(/\.pdf$/i,"").replace(/[_-]/g," "),author:"",createdAt:new Date().toISOString(),pdf:file,document:parsed,page:1,bookmarks:[],notes:[]};
+      let title=file.name.replace(/\.(pdf|epub)$/i,"").replace(/[_-]/g," ");
+      let author="";
+      if(epub){
+        // EPUB has no fixed PDF page fallback: surface parsing errors directly.
+        const extracted=await extractEpub(file,(index,total)=>setUploadLabel(`Đang dàn trang EPUB ${index}/${total}…`));
+        parsed=extracted.document;
+        title=extracted.title||title;
+        author=extracted.author;
+      }else{
+        try{parsed=await extractPdf(file,(index,total)=>setUploadLabel(`Đang xử lý trang ${index}/${total}…`));}
+        catch(error){console.warn("Could not extract PDF text, using original view",error);}
+      }
+      const book:DemoBook={id:crypto.randomUUID(),title,author,createdAt:new Date().toISOString(),pdf:file,format:epub?"epub":"pdf",document:parsed,page:1,bookmarks:[],notes:[]};
       setUploadLabel("Đang lưu vào bộ nhớ thiết bị…");
       await saveDemoBook(book);
       setBooks(previous=>[book,...previous]);openBook(book);
@@ -201,17 +215,17 @@ function DemoApp(){
   if(loading)return <div className="loading-screen"><div className="loader"/><p>Đang mở thư viện thử nghiệm…</p></div>;
   if(!current)return <div className="demo-home">
     <header className="demo-home-nav"><div className="brand"><span className="brand-symbol"><BookHeart size={22}/></span>DocSach<span className="brand-light">WithMe</span></div><div className="demo-nav-actions"><a className="demo-discover-link" href="/discover"><Globe2 size={16}/> Khám phá sách miễn phí</a><span className="demo-badge">LOCAL PREVIEW</span></div></header>
-    <main className="demo-home-main"><div className="demo-home-hero"><span className="eyebrow">YOUR READING STUDIO</span><h1>Đọc sâu hơn. <em>Ghi nhớ lâu hơn.</em></h1><p>Thử ngay trình đọc ebook, highlight và ghi chú mà không cần tài khoản. Sách của bạn chỉ nằm trên thiết bị này.</p>
+    <main className="demo-home-main"><div className="demo-home-hero"><span className="eyebrow">YOUR READING STUDIO</span><h1>Đọc sâu hơn. <em>Ghi nhớ lâu hơn.</em></h1><p>Đọc PDF hoặc EPUB, highlight và ghi chú mà không cần tài khoản. Sách của bạn chỉ nằm trên thiết bị này.</p>
       <div className="demo-hero-buttons">
-        <button className="primary-button" disabled={uploading||restoring} onClick={()=>fileRef.current?.click()}><UploadCloud size={18}/>{uploading?uploadLabel:"Thêm sách PDF"}</button>
+        <button className="primary-button" disabled={uploading||restoring} onClick={()=>fileRef.current?.click()}><UploadCloud size={18}/>{uploading?uploadLabel:"Thêm sách PDF / EPUB"}</button>
         <button className="outline-button" disabled={restoring||uploading} onClick={()=>restoreRef.current?.click()}><Download size={17}/>{restoring?"Đang khôi phục…":"Khôi phục sao lưu"}</button>
       </div>
       <input type="file" accept=".zip,.dswm.zip,application/zip" hidden ref={restoreRef} onChange={e=>restoreBackup(e.target.files?.[0])}/>
-      <input type="file" accept=".pdf,application/pdf" hidden ref={fileRef} onChange={e=>onFile(e.target.files?.[0])}/></div>
+      <input type="file" accept=".pdf,.epub,application/pdf,application/epub+zip" hidden ref={fileRef} onChange={e=>onFile(e.target.files?.[0])}/></div>
       {message&&<p className="error-banner">{message}</p>}
       <div className="demo-library-title"><h2>Kệ sách trên thiết bị</h2><span>{books.length} cuốn</span></div>
       {books.length?<div className="demo-books">{books.map((book,index)=><div className="demo-book" key={book.id}>
-        <button className="demo-book-action" onClick={()=>openBook(book)}><div className="demo-book-cover" style={{background:colors[index%colors.length]}}><BookOpen size={30}/><span>{book.title}</span><small>DOCSACHWITHME</small></div><strong>{book.title}</strong><small>{book.document?.totalPages||"PDF"} trang · đang ở trang {book.page||1}</small></button>
+        <button className="demo-book-action" onClick={()=>openBook(book)}><div className="demo-book-cover" style={{background:colors[index%colors.length]}}><BookOpen size={30}/><span>{book.title}</span><small>{book.format==="epub"?"EPUB":"PDF"} · DOCSACHWITHME</small></div><strong>{book.title}</strong><small>{book.document?.totalPages||"PDF"} trang · đang ở trang {book.page||1}</small></button>
         <div className="demo-book-actions">
           <button title="Sao lưu cả PDF, tiến độ, highlight và ghi chú" disabled={exportingId===book.id} onClick={()=>saveBackup(book)}><Download size={16}/></button>
           <button title="Xóa sách khỏi thiết bị" onClick={()=>removeBook(book)}><Trash2 size={16}/></button>
@@ -224,7 +238,7 @@ function DemoApp(){
   return <div className={`reader-shell reader-theme-${theme} demo-reader ${focus?"reader-focus":""}`}>
     <header className="reader-topbar">
       <div className="reader-top-left"><button className="icon-button" title="Về thư viện" onClick={goBack}><ArrowLeft size={19}/></button><button className="icon-button" title="Mục lục" onClick={()=>setLeftOpen(!leftOpen)}><Menu size={19}/></button><div className="reader-book-identity"><strong>{current.title}</strong><span>Thư viện thử trên thiết bị</span></div></div>
-      <div className="reader-top-mid"><div className="reader-view-switch"><button className={view==="reflow"?"selected":""} onClick={()=>setView("reflow")} disabled={!current.document?.wordCount}><BookOpen size={15}/> Ebook</button><button className={view==="original"?"selected":""} onClick={()=>setView("original")}><FileText size={15}/> PDF</button></div></div>
+      <div className="reader-top-mid"><div className="reader-view-switch"><button className={view==="reflow"?"selected":""} onClick={()=>setView("reflow")} disabled={!current.document?.wordCount}><BookOpen size={15}/> Ebook</button>{current.format!=="epub"&&<button className={view==="original"?"selected":""} onClick={()=>setView("original")}><FileText size={15}/> PDF</button>}</div></div>
       <div className="reader-top-right">
         <button className="icon-button" title="Tìm từ trong sách (/)" onClick={()=>{setSearchOpen(true);setFocus(false)}} disabled={!current.document?.wordCount}><Search size={18}/></button>
         <button className="icon-button" title="Tập trung (F)" onClick={()=>setFocus(!focus)}><Focus size={18}/></button>

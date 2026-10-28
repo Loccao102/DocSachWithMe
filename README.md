@@ -186,3 +186,17 @@ Vào **/discover** (hoặc mục **Sách miễn phí** trong thư viện). Tính
 **Tài nguyên và riêng tư:** API catalog được cache (1 giờ); metadata từng sách cache (1 ngày). Trên Vercel, server chỉ tải tài nguyên `text/plain` qua URL HTTPS thuộc Project Gutenberg, với giới hạn 2,5 MB và chỉ khi người dùng chủ động mở sách. Dữ liệu đọc đã tải về sẽ được lưu trên thiết bị, không tự nhập vào Supabase; sách tải về không được commit lên GitHub. Kho này khác với PDF cloud và `/demo`.
 
 **Ghi chú API:** Gutendex là dịch vụ cộng đồng, không phải API chính thức của Project Gutenberg. Nếu Gutendex gián đoạn, có thể dùng trang Gutenberg trực tiếp; việc tải văn bản từ Gutenberg có thể bị giới hạn tùy chính sách nguồn. Đọc sách online qua Gutendex **chỉ** dùng metadata; văn bản đến từ Gutenberg.
+
+## EPUB trực tiếp — thư viện đọc được PDF và EPUB
+
+Từ phiên bản mới, bạn có thể kéo thả **EPUB (tối đa 35MB)** vào `/demo` hoặc thư viện cloud khi đã cấu hình Supabase. Đây là sách có thể đọc kiểu *reflow*: trang, đoạn văn và chương được dàn lại phù hợp độ rộng màn hình, highlight, ghi chú, tìm kiếm, nghe sách và chỉnh typography.
+
+- `src/lib/epub.ts` đọc EPUB3/EPUB2 với OPF spine và các tệp XHTML; nhận diện tên sách, tác giả và mục lục theo thứ tự chương.
+- HTML của EPUB chỉ được **đọc textContent**, không nhúng JavaScript, CSS hay iframe từ EPUB vào website.
+- Trước khi giải nén, trình đọc kiểm tra ZIP central directory và giới hạn tổng dung lượng giải nén nhằm giảm rủi ro từ file nén bất thường.
+- Trên `/demo`, file gốc và ghi chú được lưu trong IndexedDB; chức năng ZIP backup sẽ giữ đúng định dạng `book.epub`, và các bản sao lưu PDF cũ vẫn có thể khôi phục.
+- Trên cloud, EPUB được lưu ở bucket `books` private, metadata đọc ở dạng JSON như PDF. Có nút tải lại EPUB gốc ở Reader.
+- Nếu project Supabase đã tạo bucket từ phiên bản trước, **chạy** `supabase/migrations/20261028_add_epub.sql` trong SQL Editor trước khi upload EPUB. Project mới chỉ cần chạy `supabase/schema.sql`.
+- File EPUB mở ở **Ebook Mode**, không có trình PDF gốc. Phần hình ảnh, footnote, bảng, CSS đặc biệt, công thức và mục lục EPUB nhiều cấp có thể chưa giữ được đầy đủ. Với sách có bản quyền, chỉ tải và xử lý bản sao mà bạn được phép sử dụng.
+
+Để dùng ngay mà không cần cloud: mở `/demo` → **Thêm sách PDF / EPUB** → chọn file → đọc và ghi chú. File được lưu trên thiết bị hiện tại; không tự đồng bộ giữa các thiết bị.

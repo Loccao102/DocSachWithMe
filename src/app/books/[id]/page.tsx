@@ -118,6 +118,8 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
           catch { parsed=null; }
         }
         if(!live) return;
+        if(current.file_path.endsWith(".epub") && (!parsed || !parsed.wordCount))
+          throw new Error("Không tìm thấy nội dung ebook. Bạn hãy thử tải lại file EPUB.");
         setBook(current);setDocumentData(parsed);setPdfUrl(signed.data.signedUrl);
         setNotes((storedNotes||[]) as ReaderNote[]);setBookmarks((storedBookmarks||[]) as ReaderBookmark[]);
         const currentProgress=progress as ReadingProgress|null;
@@ -159,6 +161,7 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
     }
     return found;
   },[documentData,searchTerm]);
+  const isEpub=book?.file_path.toLowerCase().endsWith(".epub")||false;
   const totalPages=book?.total_pages||documentData?.totalPages||0;
   const percent=finished?100:totalPages?Math.min(99,Math.round((page-1)/totalPages*100)):0;
   useEffect(()=>setJumpInput(String(page)),[page]);
@@ -341,7 +344,7 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
     <header className="reader-topbar">
       <div className="reader-top-left"><button className="icon-button" title="Về thư viện" onClick={()=>router.push("/")}><ArrowLeft size={19}/></button><div className="reader-divider"/>
       <button className="icon-button" title="Mục lục" onClick={()=>setLeftOpen(!leftOpen)}><Menu size={19}/></button><div className="reader-book-identity"><strong>{book.title}</strong><span>{book.author||"Thư viện của tôi"}</span></div></div>
-      <div className="reader-top-mid"><div className="reader-view-switch"><button className={view==="reflow"?"selected":""} onClick={()=>setView("reflow")} disabled={!documentData?.wordCount}><BookOpen size={15}/> Sách điện tử</button><button className={view==="original"?"selected":""} onClick={()=>setView("original")}><FileText size={15}/> PDF gốc</button></div></div>
+      <div className="reader-top-mid"><div className="reader-view-switch"><button className={view==="reflow"?"selected":""} onClick={()=>setView("reflow")} disabled={!documentData?.wordCount}><BookOpen size={15}/> Sách điện tử</button>{!isEpub&&<button className={view==="original"?"selected":""} onClick={()=>setView("original")}><FileText size={15}/> PDF gốc</button>}{isEpub&&<a className="reader-source-download" href={pdfUrl} download={book.title+".epub"} title="Tải EPUB gốc"><Download size={15}/> EPUB gốc</a>}</div></div>
       <div className="reader-top-right">
         <button className="icon-button" title="Tìm trong sách (/)" disabled={!documentData?.wordCount} onClick={()=>{setSearchOpen(true);setFocusMode(false)}}><Search size={19}/></button>
         <button className="icon-button" title="Chế độ tập trung (F)" onClick={()=>setFocusMode(!focusMode)}><Focus size={19}/></button>

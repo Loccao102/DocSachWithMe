@@ -28,23 +28,11 @@ export async function GET(request:NextRequest,{params}:Context){
     if(request.nextUrl.searchParams.get("mode")!=="read")return NextResponse.json(book,{headers:{"Cache-Control":"public, s-maxage=86400"}});
     const src=approvedGutenbergTextUrl(plaintextUrl(book),book.id);
     if(!src)return NextResponse.json({error:"Sách không có bản TXT phù hợp để đọc trong ứng dụng. Bạn có thể mở sách tại nguồn."},{status:422});
-    // User-triggered only. Follow a small number of redirects, validating every target.
-    // Project Gutenberg commonly redirects /ebooks/ID.txt.utf-8 to /cache/epub/ID/pgID.txt.
-    let destination=src;
-    let remote:Response|undefined;
-    for(let attempt=0;attempt<4;attempt++){
-      remote=await fetch(destination.toString(),{
-        cache:"no-store",redirect:"manual",signal:AbortSignal.timeout(18000),
-        headers:{"Accept":"text/plain"}
-      });
-      if(![301,302,303,307,308].includes(remote.status))break;
-      const next=remote.headers.get("location");
-      const resolved=next?approvedGutenbergTextUrl(new URL(next,destination).toString(),book.id):null;
-      if(!resolved)throw new Error("Nguồn sách chuyển hướng đến địa chỉ không được phép.");
-      destination=resolved;
-      remote=undefined;
-    }
-    if(!remote)throw new Error("Nguồn sách chuyển hướng quá nhiều lần.");
+    // Fetched only following an explicit user read action, never bulk-prefetched.
+    const remote=await fetch(src.toString(),{
+      cache:"no-store",redirect:"manual",signal:AbortSignal.timeout(18000),
+      headers:{"Accept":"text/plain"}
+    });
     if(!remote.ok)throw new Error("Nguồn sách không trả về nội dung.");
     const size=Number(remote.headers.get("content-length")||0);
     if(size>2_500_000)return NextResponse.json({error:"Sách quá lớn cho trình đọc trực tuyến hiện tại. Hãy tải EPUB từ nguồn."},{status:413});

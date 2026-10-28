@@ -511,3 +511,8 @@ h1,h2,h3,p{margin-top:0}
 .free-reading-audio{bottom:68px}
 .demo-discover-link{font-size:0}.demo-discover-link svg{height:19px;width:19px}
 }
+
+/* Native EPUB import and cloud source download */
+.reader-view-switch .reader-source-download{display:flex;align-items:center;gap:7px;color:#668c74;font-size:11px;font-weight:700;padding:8px 11px;white-space:nowrap;border-radius:7px}
+.reader-view-switch .reader-source-download:hover{background:#e6efe6}
+@media(max-width:750px){.reader-view-switch .reader-source-download{font-size:0;padding:8px}.reader-view-switch .reader-source-download svg{width:17px;height:17px}}

@@ -10,6 +10,7 @@ import {
 import { AuthGate } from "@/components/AuthGate";
 import { requireSupabase } from "@/lib/supabase";
 import { extractPdf } from "@/lib/pdf";
+import { extractEpub } from "@/lib/epub";
 import type { Book, ReadingProgress } from "@/lib/types";
 
 const colors = ["#9c766e", "#718578", "#9c8d6d", "#6c8292", "#b57e61", "#716f8a", "#8d7760"];
@@ -70,10 +71,12 @@ function Library({ user }: { user: User }) {
 
   function selectFile(next: File | null) {
     if (!next) return;
-    if (!next.name.toLowerCase().endsWith(".pdf") || next.size > 50 * 1024 * 1024) {
-      setUploadError("Vui lòng chọn PDF không vượt quá 50 MB."); return;
+    const epub=next.name.toLowerCase().endsWith(".epub");
+    const pdf=next.name.toLowerCase().endsWith(".pdf");
+    if ((!epub&&!pdf) || next.size > (epub?35:50)*1024*1024) {
+      setUploadError("Vui lòng chọn PDF tối đa 50MB hoặc EPUB tối đa 35MB."); return;
     }
-    setFile(next);setTitle(next.name.replace(/\.pdf$/i, "").replace(/[_-]/g," ").trim());setUploadError("");setUploadOpen(true);
+    setFile(next);setTitle(next.name.replace(/\.(pdf|epub)$/i, "").replace(/[_-]/g," ").trim());setUploadError("");setUploadOpen(true);
   }
 
   async function upload() {
@@ -81,18 +84,27 @@ function Library({ user }: { user: User }) {
     setUploading(true);setUploadError("");setUploadProgress(2);setUploadMessage("Đang đọc và sắp xếp các trang sách…");
     const client = requireSupabase();
     const id = crypto.randomUUID();
-    const path = `${user.id}/${id}.pdf`;
+    const isEpub=file.name.toLowerCase().endsWith(".epub");
+    const path = `${user.id}/${id}.${isEpub?"epub":"pdf"}`;
     const textPath = `${user.id}/${id}.json`;
     let pdfUploaded = false, textUploaded = false;
     try {
       let documentData = null;
+      let extractedAuthor=author.trim();
       try {
-        documentData = await extractPdf(file, (current,total) => setUploadProgress(Math.round(5 + current / total * 65)));
+        if(isEpub){
+          const extracted=await extractEpub(file,(current,total)=>setUploadProgress(Math.round(5+current/total*65)));
+          documentData=extracted.document;
+          if(!extractedAuthor && extracted.author)extractedAuthor=extracted.author;
+        } else {
+          documentData=await extractPdf(file, (current,total) => setUploadProgress(Math.round(5 + current / total * 65)));
+        }
       } catch (extractionError) {
+        if(isEpub)throw extractionError;
         console.warn("PDF text extraction unavailable; original reader will still work:", extractionError);
       }
       setUploadMessage("Đang lưu sách vào thư viện cloud…"); setUploadProgress(74);
-      const pdfResult = await client.storage.from("books").upload(path, file, { upsert: false, contentType: "application/pdf" });
+      const pdfResult = await client.storage.from("books").upload(path, file, { upsert: false, contentType: isEpub?"application/epub+zip":"application/pdf" });
       if (pdfResult.error) throw pdfResult.error;
       pdfUploaded = true;
       if (documentData) {
@@ -103,7 +115,7 @@ function Library({ user }: { user: User }) {
       }
       setUploadProgress(92);setUploadMessage("Đang hoàn thiện kệ sách…");
       const { error } = await client.from("books").insert({
-        id, owner_id: user.id, title: title.trim(), author: author.trim() || null,
+        id, owner_id: user.id, title: title.trim(), author: (extractedAuthor || null),
         file_path: path, text_path: textUploaded ? textPath : null,
         total_pages: documentData?.totalPages || 0, word_count: documentData?.wordCount || 0,
         cover_color: colors[Math.floor(Math.random() * colors.length)]
@@ -167,7 +179,7 @@ function Library({ user }: { user: User }) {
             <strong>{book.title}</strong><span className="book-author">{book.author||"Chưa có tác giả"}</span>
             <div className="book-progress"><span><span style={{width:`${progress[book.id]?.percent || 0}%`}}/></span><small>{book.total_pages ? `${book.total_pages} trang` : "PDF gốc"} · {Math.round(progress[book.id]?.percent || 0)}%</small></div>
           </button><button className="book-delete" title="Xóa sách" onClick={()=>removeBook(book)}><Trash2 size={16}/></button></div>)}
-          <button className="add-book-card" onClick={()=>setUploadOpen(true)}><span><Plus size={25}/></span><strong>Thêm cuốn sách mới</strong><small>PDF · Tối đa 50MB</small></button>
+          <button className="add-book-card" onClick={()=>setUploadOpen(true)}><span><Plus size={25}/></span><strong>Thêm cuốn sách mới</strong><small>PDF / EPUB</small></button>
         </div> : <div className="empty-panel"><div className="empty-icon"><BookText size={30}/></div><h3>{search?"Không tìm thấy cuốn sách nào":"Một kệ sách đang chờ được lấp đầy."}</h3><p>{search?"Thử tìm với từ khóa khác nhé.":"Tải lên cuốn PDF đầu tiên để bắt đầu trải nghiệm đọc thật khác."}</p><button className="outline-button" onClick={()=>setUploadOpen(true)}><Plus size={18}/> Thêm sách đầu tiên</button></div>}
         <footer className="library-footer"><span>Made for curious minds ✳</span><span>DocSachWithMe © 2026</span></footer>
       </div>
@@ -175,8 +187,8 @@ function Library({ user }: { user: User }) {
     {uploadOpen && <div className="modal-overlay" onMouseDown={e=>{if(e.target===e.currentTarget && !uploading)setUploadOpen(false)}}><div className="upload-modal">
       <div className="modal-heading"><div><span className="eyebrow">NEW BOOK</span><h2>Thêm vào thư viện</h2></div><button className="icon-button" disabled={uploading} onClick={()=>setUploadOpen(false)}><X size={20}/></button></div>
       <div className={`dropzone ${file?"has-file":""}`} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();selectFile(e.dataTransfer.files[0])}} onClick={()=>!uploading && inputRef.current?.click()}>
-        <input ref={inputRef} accept="application/pdf,.pdf" type="file" hidden onChange={e=>selectFile(e.target.files?.[0]||null)}/>
-        <span><CloudUpload size={27}/></span><strong>{file ? file.name : "Kéo thả PDF vào đây"}</strong><small>{file ? `${(file.size / 1024 / 1024).toFixed(1)} MB · Sẵn sàng tải lên` : "hoặc nhấp để chọn từ thiết bị · tối đa 50MB"}</small>
+        <input ref={inputRef} accept="application/pdf,application/epub+zip,.pdf,.epub" type="file" hidden onChange={e=>selectFile(e.target.files?.[0]||null)}/>
+        <span><CloudUpload size={27}/></span><strong>{file ? file.name : "Kéo thả PDF hoặc EPUB vào đây"}</strong><small>{file ? `${(file.size / 1024 / 1024).toFixed(1)} MB · Sẵn sàng tải lên` : "hoặc nhấp để chọn · PDF tối đa 50MB, EPUB tối đa 35MB"}</small>
       </div>
       <label className="modal-field">Tên cuốn sách <input disabled={uploading} value={title} onChange={e=>setTitle(e.target.value)} placeholder="Ví dụ: Nghệ thuật tư duy rõ ràng"/></label>
       <label className="modal-field">Tác giả <span>(không bắt buộc)</span><input disabled={uploading} value={author} onChange={e=>setAuthor(e.target.value)} placeholder="Tên tác giả"/></label>

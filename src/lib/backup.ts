@@ -15,7 +15,8 @@ const makeFileName=(name:string)=>name.normalize("NFD").replace(/[\u0300-\u036f]
 export async function exportDemoBackup(book:DemoBook):Promise<void>{
   const { pdf, ...metadata }=book;
   const manifest:BackupPayload={format:"docsachwithme",version:1,book:metadata};
-  const files={"book.pdf":new Uint8Array(await pdf.arrayBuffer()),"manifest.json":strToU8(JSON.stringify(manifest))};
+  const sourceName=book.format==="epub"?"book.epub":"book.pdf";
+  const files:{[name:string]:Uint8Array}={[sourceName]:new Uint8Array(await pdf.arrayBuffer()),"manifest.json":strToU8(JSON.stringify(manifest))};
   const bytes=await new Promise<Uint8Array>((resolve,reject)=>{
     zip(files,{level:0},(error,data)=>error?reject(error):resolve(data));
   });
@@ -40,8 +41,9 @@ export async function importDemoBackup(file:File):Promise<DemoBook>{
     unzip(raw,(error,result)=>error?reject(error):resolve(result));
   });
   const manifestFile=archive["manifest.json"];
-  const pdf=archive["book.pdf"];
-  if(!manifestFile||manifestFile.byteLength>65*1024*1024||!pdf||pdf.byteLength===0||pdf.byteLength>maxOriginalBytes)
+  const original=archive["book.epub"]||archive["book.pdf"];
+  const format=archive["book.epub"]?"epub":"pdf";
+  if(!manifestFile||manifestFile.byteLength>65*1024*1024||!original||original.byteLength===0||original.byteLength>maxOriginalBytes)
     throw new Error("Bản sao lưu không hợp lệ hoặc PDF vượt quá 50MB.");
   let data:BackupPayload;
   try{data=JSON.parse(strFromU8(manifestFile)) as BackupPayload;}
@@ -56,11 +58,11 @@ export async function importDemoBackup(file:File):Promise<DemoBook>{
     typeof n?.blockId==="string" && typeof n?.content==="string" && Number.isInteger(n?.page))
     .slice(0,20000).map(n=>({...n,quote:n.quote.slice(0,2500),content:n.content.slice(0,15000)}));
   const bookmarks=data.book.bookmarks.filter(n=>Number.isInteger(n)&&n>=1).slice(0,3000);
-  const pdfFile=new Blob([new Uint8Array(pdf)],{type:"application/pdf"});
+  const bookFile=new Blob([new Uint8Array(original)],{type:format==="epub"?"application/epub+zip":"application/pdf"});
   return {
     id:crypto.randomUUID(),title:data.book.title||"Sách được khôi phục",
     author:typeof data.book.author==="string"?data.book.author.slice(0,200):"",
-    createdAt:new Date().toISOString(),pdf:pdfFile,
+    createdAt:new Date().toISOString(),pdf:bookFile,format,
     document:data.book.document||null,
     page:Math.max(1,Math.floor(data.book.page)),
     notes,bookmarks

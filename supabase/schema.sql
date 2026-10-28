@@ -64,9 +64,9 @@ create policy "Owner manages bookmarks" on public.reader_bookmarks for all to au
   with check (owner_id = auth.uid() and exists(select 1 from public.books b where b.id = book_id and b.owner_id = auth.uid()));
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('books', 'books', false, 52428800, array['application/pdf','application/json'])
+values ('books', 'books', false, 52428800, array['application/pdf','application/json','application/epub+zip'])
 on conflict (id) do update set public=false, file_size_limit=52428800,
-  allowed_mime_types=array['application/pdf','application/json'];
+  allowed_mime_types=array['application/pdf','application/json','application/epub+zip'];
 
 create policy "Readers upload own files" on storage.objects for insert to authenticated
   with check (bucket_id='books' and (storage.foldername(name))[1]=auth.uid()::text);
