@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, BookHeart, BookOpen, BookText, Check, ChevronLeft, ChevronRight, Download, ExternalLink, Globe2, LibraryBig, LoaderCircle, Search, Sparkles } from "lucide-react";
+import { NotebookPen } from "lucide-react";
 import { coverUrl, epubUrl, gutenbergPage, plaintextUrl, type GutenbergBook } from "@/lib/free-books";
 import { listPublicBooks, removePublicBook } from "@/lib/public-library";
 import type { SavedPublicBook } from "@/lib/free-books";
@@ -50,7 +51,7 @@ export default function DiscoverPage(){
   }
   return <div className="free-library">
     <header className="free-navbar"><Link className="free-logo" href="/"><span><BookHeart size={20}/></span>DocSach<em>WithMe</em></Link>
-      <nav><Link href="/demo"><BookOpen size={16}/> Đọc PDF</Link><Link className="selected" href="/discover"><Globe2 size={16}/> Sách miễn phí</Link></nav>
+      <nav><Link href="/demo"><BookOpen size={16}/> Đọc PDF</Link><Link className="selected" href="/discover"><Globe2 size={16}/> Sách miễn phí</Link><Link href="/knowledge"><NotebookPen size={16}/> Sổ tay</Link></nav>
     </header>
     <main className="free-main">
       <section className="free-hero"><div><span className="eyebrow"><span className="eyebrow-line"/> OPEN BOOKS · FREE TO EXPLORE</span>

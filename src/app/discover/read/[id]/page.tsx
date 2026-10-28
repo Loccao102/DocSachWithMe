@@ -9,6 +9,7 @@ import type { GutenbergBook, PublicNote, SavedPublicBook } from "@/lib/free-book
 import { coverUrl, gutenbergPage } from "@/lib/free-books";
 import { getPublicBook, putPublicBook } from "@/lib/public-library";
 import { useReadAloud } from "@/hooks/useReadAloud";
+import { NotebookPen } from "lucide-react";
 
 type ReadingTheme="cream"|"white"|"dark";
 type Selection={blockId:string;quote:string;page:number};
@@ -36,6 +37,7 @@ export default function PublicBookReader(){
   const pageRoot=useRef<HTMLDivElement>(null);
   const tts=useReadAloud();
   const savedRef=useRef<number|null>(null);
+  const linkedBlockRef=useRef<string|null>(null);
 
   useEffect(()=>{
     try{
@@ -54,7 +56,13 @@ export default function PublicBookReader(){
         if(!Number.isInteger(bookId)||bookId<=0)throw new Error("Mã sách không hợp lệ.");
         const local=await getPublicBook(bookId);
         if(!live)return;
-        if(local){setBook(local);setPage(local.page);savedRef.current=local.id;return;}
+        if(local){
+          const params=new URLSearchParams(window.location.search);
+          const requested=Number(params.get("page"));
+          const nextPage=Number.isInteger(requested)&&requested>0?Math.min(requested,local.document.totalPages):local.page;
+          linkedBlockRef.current=params.get("block");
+          setBook({...local,page:nextPage});setPage(nextPage);savedRef.current=local.id;return;
+        }
         // Fetch text only when the reader was opened explicitly. No bulk downloads.
         const response=await fetch(`/api/free-books/${bookId}?mode=read`,{cache:"no-store"});
         const payload=await response.json() as {error?:string;book:GutenbergBook;document:BookDocument};
@@ -70,7 +78,13 @@ export default function PublicBookReader(){
           document:payload.document
         };
         await putPublicBook(item);
-        if(live){setBook(item);setPage(1);savedRef.current=item.id;}
+        if(live){
+          const params=new URLSearchParams(window.location.search);
+          const requested=Number(params.get("page"));
+          const nextPage=Number.isInteger(requested)&&requested>0?Math.min(requested,item.document.totalPages):1;
+          linkedBlockRef.current=params.get("block");
+          setBook({...item,page:nextPage});setPage(nextPage);savedRef.current=item.id;
+        }
       }catch(ex){if(live)setError(ex instanceof Error?ex.message:"Không thể mở sách.");}
       finally{if(live){setLoading(false);setReady(true);}}
     }
@@ -171,6 +185,15 @@ export default function PublicBookReader(){
     window.addEventListener("keydown",onKey);return()=>window.removeEventListener("keydown",onKey);
   });
   useEffect(()=>{if(tts.activeId)document.getElementById("free-"+tts.activeId)?.scrollIntoView({block:"center",behavior:"smooth"});},[tts.activeId]);
+  useEffect(()=>{
+    if(!book||!linkedBlockRef.current)return;
+    const target=linkedBlockRef.current;
+    const timer=window.setTimeout(()=>{
+      document.getElementById("free-"+target)?.scrollIntoView({block:"center",behavior:"smooth"});
+      linkedBlockRef.current=null;
+    },150);
+    return()=>window.clearTimeout(timer);
+  },[book?.id,page]);
   const source=gutenbergPage(bookId);
 
   if(loading)return <div className="free-read-loading"><LoaderCircle className="spin" size={28}/><h2>Đang mở những trang sách…</h2><p>Lần đầu mở sách, hệ thống cần lấy bản văn từ nguồn và lưu để đọc lại trên thiết bị.</p></div>;
@@ -182,7 +205,7 @@ export default function PublicBookReader(){
         <button className="icon-button" title="Mục lục" onClick={()=>setLeftOpen(!leftOpen)}><Menu size={19}/></button>
         <div className="reader-book-identity"><strong>{book.title}</strong><span>{book.author}</span></div></div>
       <div className="reader-top-right">
-        <span className="free-reader-source">GUTENBERG #{book.id}</span>
+        <span className="free-reader-source">GUTENBERG #{book.id}</span><Link className="icon-button" title="Sổ tay" href="/knowledge"><NotebookPen size={18}/></Link>
         <button className="icon-button" title="Tìm trong sách" onClick={()=>{setSearchOpen(true);setFocus(false)}}><Search size={18}/></button>
         <button className="icon-button" title="Chế độ tập trung" onClick={()=>setFocus(!focus)}><Focus size={18}/></button>
         <button className="icon-button" title="Nghe trang này" disabled={!tts.available} onClick={()=>tts.state==="idle"?tts.play(blocks.map(b=>({id:b.id,text:b.text})),book.language==="vi"?"vi-VN":"en-US"):tts.pauseOrResume()}>{tts.state==="playing"?<Pause size={17}/>:<Volume2 size={19}/>}</button>

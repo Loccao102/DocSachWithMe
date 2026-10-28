@@ -8,6 +8,7 @@ import {
 import { extractPdf } from "@/lib/pdf";
 import { extractEpub } from "@/lib/epub";
 import { useReadAloud } from "@/hooks/useReadAloud";
+import { NotebookPen } from "lucide-react";
 import TocEditor from "@/components/TocEditor";
 import { exportDemoBackup, importDemoBackup } from "@/lib/backup";
 import { deleteDemoBook, getDemoBook, listDemoBooks, saveDemoBook, type DemoBook, type DemoNote } from "@/lib/demo-store";
@@ -57,11 +58,26 @@ function DemoApp(){
   const [restoring,setRestoring]=useState(false);
   const [exportingId,setExportingId]=useState<string|null>(null);
   const readerRef=useRef<HTMLElement>(null);
+  const linkedBlockRef=useRef<string|null>(null);
   const activeRef=useRef<DemoBook|null>(null);
   const pdfUrl=useMemo(()=>current?.pdf?URL.createObjectURL(current.pdf):"",[current?.id,current?.pdf]);
   useEffect(()=>()=>{if(pdfUrl)URL.revokeObjectURL(pdfUrl)},[pdfUrl]);
   useEffect(()=>{
-    listDemoBooks().then(data=>setBooks(data.sort((a,b)=>b.createdAt.localeCompare(a.createdAt)))).catch(()=>setMessage("Không thể truy cập bộ nhớ trình duyệt. Hãy bật IndexedDB để dùng thử.")).finally(()=>setLoading(false));
+    listDemoBooks().then(data=>{
+      setBooks(data.sort((a,b)=>b.createdAt.localeCompare(a.createdAt)));
+      const params=new URLSearchParams(window.location.search);
+      const linked=data.find(item=>item.id===params.get("book"));
+      if(linked){
+        const paramPage=Number(params.get("page"));
+        const safePage=Number.isInteger(paramPage)&&paramPage>=1?Math.min(paramPage,linked.document?.totalPages||paramPage):linked.page||1;
+        setCurrent({...linked,page:safePage});
+        activeRef.current=linked;
+        setPage(safePage);setJumpInput(String(safePage));
+        setView(linked.format==="epub"||Boolean(linked.document?.wordCount)?"reflow":"original");
+        setLeftOpen(window.innerWidth>=800);
+        linkedBlockRef.current=params.get("block");
+      }
+    }).catch(()=>setMessage("Không thể truy cập bộ nhớ trình duyệt. Hãy bật IndexedDB để dùng thử.")).finally(()=>setLoading(false));
     try{
       const saved=JSON.parse(localStorage.getItem("docsach-reader-settings")||"{}");
       if(["cream","white","dark"].includes(saved.theme))setTheme(saved.theme);
@@ -88,6 +104,15 @@ function DemoApp(){
     window.addEventListener("keydown",listener);return()=>window.removeEventListener("keydown",listener);
   });
   const blocks=useMemo(()=>current?.document?.pages.find(p=>p.page===page)?.blocks||[],[current,page]);
+  useEffect(()=>{
+    if(!current||!linkedBlockRef.current||!current.document)return;
+    const target=linkedBlockRef.current;
+    const timer=window.setTimeout(()=>{
+      document.getElementById("demo-"+target)?.scrollIntoView({block:"center",behavior:"smooth"});
+      linkedBlockRef.current=null;
+    },180);
+    return()=>window.clearTimeout(timer);
+  },[current?.id,page]);
   useEffect(()=>setJumpInput(String(page)),[page]);
   useEffect(()=>{
     if(tts.activeId && view==="reflow")document.getElementById("demo-"+tts.activeId)?.scrollIntoView({behavior:"smooth",block:"center"});
@@ -214,7 +239,7 @@ function DemoApp(){
   const toc=current?.document?.toc||[];
   if(loading)return <div className="loading-screen"><div className="loader"/><p>Đang mở thư viện thử nghiệm…</p></div>;
   if(!current)return <div className="demo-home">
-    <header className="demo-home-nav"><div className="brand"><span className="brand-symbol"><BookHeart size={22}/></span>DocSach<span className="brand-light">WithMe</span></div><div className="demo-nav-actions"><a className="demo-discover-link" href="/discover"><Globe2 size={16}/> Khám phá sách miễn phí</a><span className="demo-badge">LOCAL PREVIEW</span></div></header>
+    <header className="demo-home-nav"><div className="brand"><span className="brand-symbol"><BookHeart size={22}/></span>DocSach<span className="brand-light">WithMe</span></div><div className="demo-nav-actions"><a className="demo-discover-link" href="/discover"><Globe2 size={16}/> Khám phá sách miễn phí</a><a className="demo-discover-link" href="/knowledge"><NotebookPen size={16}/> Sổ tay</a><span className="demo-badge">LOCAL PREVIEW</span></div></header>
     <main className="demo-home-main"><div className="demo-home-hero"><span className="eyebrow">YOUR READING STUDIO</span><h1>Đọc sâu hơn. <em>Ghi nhớ lâu hơn.</em></h1><p>Đọc PDF hoặc EPUB, highlight và ghi chú mà không cần tài khoản. Sách của bạn chỉ nằm trên thiết bị này.</p>
       <div className="demo-hero-buttons">
         <button className="primary-button" disabled={uploading||restoring} onClick={()=>fileRef.current?.click()}><UploadCloud size={18}/>{uploading?uploadLabel:"Thêm sách PDF / EPUB"}</button>
@@ -237,7 +262,7 @@ function DemoApp(){
 
   return <div className={`reader-shell reader-theme-${theme} demo-reader ${focus?"reader-focus":""}`}>
     <header className="reader-topbar">
-      <div className="reader-top-left"><button className="icon-button" title="Về thư viện" onClick={goBack}><ArrowLeft size={19}/></button><button className="icon-button" title="Mục lục" onClick={()=>setLeftOpen(!leftOpen)}><Menu size={19}/></button><div className="reader-book-identity"><strong>{current.title}</strong><span>Thư viện thử trên thiết bị</span></div></div>
+      <div className="reader-top-left"><button className="icon-button" title="Về thư viện" onClick={goBack}><ArrowLeft size={19}/></button><button className="icon-button" title="Mục lục" onClick={()=>setLeftOpen(!leftOpen)}><Menu size={19}/></button><div className="reader-book-identity"><strong>{current.title}</strong><span>Thư viện thử trên thiết bị</span></div><a href="/knowledge" className="icon-button" title="Mở sổ tay ghi chú"><NotebookPen size={18}/></a></div>
       <div className="reader-top-mid"><div className="reader-view-switch"><button className={view==="reflow"?"selected":""} onClick={()=>setView("reflow")} disabled={!current.document?.wordCount}><BookOpen size={15}/> Ebook</button>{current.format!=="epub"&&<button className={view==="original"?"selected":""} onClick={()=>setView("original")}><FileText size={15}/> PDF</button>}</div></div>
       <div className="reader-top-right">
         <button className="icon-button" title="Tìm từ trong sách (/)" onClick={()=>{setSearchOpen(true);setFocus(false)}} disabled={!current.document?.wordCount}><Search size={18}/></button>

@@ -200,3 +200,20 @@ Từ phiên bản mới, bạn có thể kéo thả **EPUB (tối đa 35MB)** v�
 - File EPUB mở ở **Ebook Mode**, không có trình PDF gốc. Phần hình ảnh, footnote, bảng, CSS đặc biệt, công thức và mục lục EPUB nhiều cấp có thể chưa giữ được đầy đủ. Với sách có bản quyền, chỉ tải và xử lý bản sao mà bạn được phép sử dụng.
 
 Để dùng ngay mà không cần cloud: mở `/demo` → **Thêm sách PDF / EPUB** → chọn file → đọc và ghi chú. File được lưu trên thiết bị hiện tại; không tự đồng bộ giữa các thiết bị.
+
+## Không gian tri thức chung — /knowledge
+
+Mở `/knowledge` từ thư viện chính, `/demo` hoặc mục **Sổ tay** trên thanh điều hướng. Tính năng này **không cần AI API key**.
+
+- Tự tổng hợp các highlight/ghi chú đang lưu trên trình duyệt từ PDF & EPUB (`/demo`) và sách Gutenberg (`/discover`).
+- Nếu bạn đã cấu hình Supabase và đăng nhập, trang cũng đọc ghi chú trong `reader_notes` và tên sách từ `books` bằng quyền RLS hiện có (chỉ sách của chủ tài khoản).
+- Tìm kiếm không dấu tiếng Việt trong tiêu đề, tác giả, đoạn trích và nội dung note; lọc nguồn.
+- Xuất một bản Markdown của toàn bộ ghi chú đang lọc, nhóm theo từng cuốn sách.
+- **Về đoạn sách:** từ mỗi note, nhấn mở lại đúng cuốn và trang/đoạn được đánh dấu (dữ liệu phải còn trên trình duyệt hoặc tài khoản cloud).
+- Tạo flashcard từ ghi chú đã có, hoặc tự viết câu hỏi và câu trả lời. AI không cần tham gia.
+- Học theo lịch giãn cách (spaced repetition): chọn Học lại, Khó, Nhớ được hoặc Dễ; hệ thống tính lại ngày ôn. Nếu quên, thẻ trở lại sau 10 phút.
+- Flashcard lưu qua IndexedDB trên thiết bị hiện tại, **không đồng bộ với Supabase**. Bạn không nên xóa dữ liệu trình duyệt nếu chưa có bản sao riêng.
+
+Cụ thể, có thể dùng `/demo` → highlight → viết ghi chú → mở `/knowledge` → **Tạo flashcard** → ôn tập.
+
+Giới hạn: sổ tay từ sách local và Gutenberg chỉ xuất hiện trên **đúng trình duyệt/thiết bị** nơi đã lưu chúng. Trong tương lai có thể bổ sung sync và backup riêng cho flashcard. Đường dẫn tới đoạn sách trong bản EPUB/PDF được neo theo mã đoạn tại thời điểm import; nếu upload lại sách và hệ thống trích xuất khác, neo cũ có thể không còn tương ứng.

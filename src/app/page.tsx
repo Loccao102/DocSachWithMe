@@ -5,7 +5,7 @@ import type { User } from "@supabase/supabase-js";
 import {
   ArrowDownUp, ArrowRight, BookHeart, BookOpen, BookText, Check, ChevronDown,
   CloudUpload, Compass, FileText, LibraryBig, LogOut, Plus, Search, Sparkles,
-  Trash2, UploadCloud, Globe2, X
+  Trash2, UploadCloud, Globe2, NotebookPen, X
 } from "lucide-react";
 import { AuthGate } from "@/components/AuthGate";
 import { requireSupabase } from "@/lib/supabase";
@@ -149,7 +149,7 @@ function Library({ user }: { user: User }) {
         <button className={filter==="all" ? "active" : ""} onClick={() => setFilter("all")}><LibraryBig size={18}/> Thư viện <span>{books.length}</span></button>
         <button className={filter==="reading" ? "active" : ""} onClick={() => setFilter("reading")}><BookOpen size={18}/> Đang đọc <span>{reading}</span></button>
         <button className={filter==="finished" ? "active" : ""} onClick={() => setFilter("finished")}><Check size={18}/> Đã hoàn thành <span>{finished}</span></button>
-        <a className="side-explore-link" href="/discover"><Globe2 size={18}/> Sách miễn phí <span>↗</span></a>
+        <a className="side-explore-link" href="/discover"><Globe2 size={18}/> Sách miễn phí <span>↗</span></a><a className="side-explore-link" href="/knowledge"><NotebookPen size={18}/> Sổ tay tri thức <span>↗</span></a>
       </nav>
       <div className="sidebar-bottom">
         <div className="sidebar-quote"><Sparkles size={20}/><p>“Giữa những trang sách, ta tìm thấy những phiên bản khác của chính mình.”</p></div>

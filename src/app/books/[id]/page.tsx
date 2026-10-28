@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import {
-  ArrowLeft, ArrowRight, BookHeart, BookMarked, BookOpen, Bookmark,
+  ArrowLeft, ArrowRight, BookHeart, BookMarked, BookOpen, Bookmark, NotebookPen,
   Check, ChevronDown, ChevronLeft, ChevronRight, FileText, Highlighter,
   List, LoaderCircle, Menu, MessageCircle, Minus, Moon, Search, Focus, Download, Copy, Volume2, Pause, Play, Square, PanelRightClose,
   PanelRightOpen, Plus, Send, Settings2, Sparkles, StickyNote, Sun, Trash2, X
@@ -123,10 +123,16 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
         setBook(current);setDocumentData(parsed);setPdfUrl(signed.data.signedUrl);
         setNotes((storedNotes||[]) as ReaderNote[]);setBookmarks((storedBookmarks||[]) as ReaderBookmark[]);
         const currentProgress=progress as ReadingProgress|null;
-        setPage(currentProgress?.page||1);
-        setActiveBlock(currentProgress?.block_id||"");
-        setJumpInput(String(currentProgress?.page||1));
-        restoreBlockRef.current=currentProgress?.block_id||null;
+        const params=new URLSearchParams(window.location.search);
+        const requestedBlock=params.get("block");
+        const fromBlock=requestedBlock?.match(/^p(\d+)-b\d+$/);
+        const requestedPage=fromBlock?Number(fromBlock[1]):Number(params.get("page"));
+        const initialPage=Number.isInteger(requestedPage)&&requestedPage>0?
+          Math.min(requestedPage,parsed?.totalPages||current.total_pages||requestedPage):currentProgress?.page||1;
+        setPage(initialPage);
+        setActiveBlock(requestedBlock||currentProgress?.block_id||"");
+        setJumpInput(String(initialPage));
+        restoreBlockRef.current=requestedBlock||currentProgress?.block_id||null;
         setFinished((currentProgress?.percent||0)>=100);
         if (!parsed || !parsed.wordCount) setView("original");
         client.from("books").update({last_opened_at:new Date().toISOString()}).eq("id",bookId).then(()=>{});
@@ -343,7 +349,7 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
   return <div className={`reader-shell reader-theme-${theme} ${focusMode?"reader-focus":""}`}>
     <header className="reader-topbar">
       <div className="reader-top-left"><button className="icon-button" title="Về thư viện" onClick={()=>router.push("/")}><ArrowLeft size={19}/></button><div className="reader-divider"/>
-      <button className="icon-button" title="Mục lục" onClick={()=>setLeftOpen(!leftOpen)}><Menu size={19}/></button><div className="reader-book-identity"><strong>{book.title}</strong><span>{book.author||"Thư viện của tôi"}</span></div></div>
+      <button className="icon-button" title="Mục lục" onClick={()=>setLeftOpen(!leftOpen)}><Menu size={19}/></button><div className="reader-book-identity"><strong>{book.title}</strong><span>{book.author||"Thư viện của tôi"}</span></div><button className="icon-button" title="Sổ tay ghi chú" onClick={()=>router.push("/knowledge")}><NotebookPen size={18}/></button></div>
       <div className="reader-top-mid"><div className="reader-view-switch"><button className={view==="reflow"?"selected":""} onClick={()=>setView("reflow")} disabled={!documentData?.wordCount}><BookOpen size={15}/> Sách điện tử</button>{!isEpub&&<button className={view==="original"?"selected":""} onClick={()=>setView("original")}><FileText size={15}/> PDF gốc</button>}{isEpub&&<a className="reader-source-download" href={pdfUrl} download={book.title+".epub"} title="Tải EPUB gốc"><Download size={15}/> EPUB gốc</a>}</div></div>
       <div className="reader-top-right">
         <button className="icon-button" title="Tìm trong sách (/)" disabled={!documentData?.wordCount} onClick={()=>{setSearchOpen(true);setFocusMode(false)}}><Search size={19}/></button>
