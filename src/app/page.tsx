@@ -91,11 +91,13 @@ function Library({ user }: { user: User }) {
     try {
       let documentData = null;
       let extractedAuthor=author.trim();
+      let extractedTitle=title.trim();
       try {
         if(isEpub){
           const extracted=await extractEpub(file,(current,total)=>setUploadProgress(Math.round(5+current/total*65)));
           documentData=extracted.document;
           if(!extractedAuthor && extracted.author)extractedAuthor=extracted.author;
+          if(extracted.title && extractedTitle===file.name.replace(/\.(pdf|epub)$/i, "").replace(/[_-]/g," ").trim())extractedTitle=extracted.title;
         } else {
           documentData=await extractPdf(file, (current,total) => setUploadProgress(Math.round(5 + current / total * 65)));
         }
@@ -115,7 +117,7 @@ function Library({ user }: { user: User }) {
       }
       setUploadProgress(92);setUploadMessage("Đang hoàn thiện kệ sách…");
       const { error } = await client.from("books").insert({
-        id, owner_id: user.id, title: title.trim(), author: (extractedAuthor || null),
+        id, owner_id: user.id, title: extractedTitle, author: (extractedAuthor || null),
         file_path: path, text_path: textUploaded ? textPath : null,
         total_pages: documentData?.totalPages || 0, word_count: documentData?.wordCount || 0,
         cover_color: colors[Math.floor(Math.random() * colors.length)]

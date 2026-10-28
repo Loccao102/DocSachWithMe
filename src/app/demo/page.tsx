@@ -58,7 +58,7 @@ function DemoApp(){
   const [exportingId,setExportingId]=useState<string|null>(null);
   const readerRef=useRef<HTMLElement>(null);
   const activeRef=useRef<DemoBook|null>(null);
-  const pdfUrl=useMemo(()=>current?.pdf && current.format!=="epub"?URL.createObjectURL(current.pdf):"",[current?.id,current?.pdf,current?.format]);
+  const pdfUrl=useMemo(()=>current?.pdf?URL.createObjectURL(current.pdf):"",[current?.id,current?.pdf]);
   useEffect(()=>()=>{if(pdfUrl)URL.revokeObjectURL(pdfUrl)},[pdfUrl]);
   useEffect(()=>{
     listDemoBooks().then(data=>setBooks(data.sort((a,b)=>b.createdAt.localeCompare(a.createdAt)))).catch(()=>setMessage("Không thể truy cập bộ nhớ trình duyệt. Hãy bật IndexedDB để dùng thử.")).finally(()=>setLoading(false));
@@ -244,6 +244,7 @@ function DemoApp(){
         <button className="icon-button" title="Tập trung (F)" onClick={()=>setFocus(!focus)}><Focus size={18}/></button>
         <button className="icon-button" title="Nghe đọc trang hiện tại" disabled={!current.document?.wordCount || !tts.available} onClick={()=>tts.state==="idle"?tts.play(blocks.map(block=>({id:block.id,text:block.text}))):tts.pauseOrResume()}>{tts.state==="playing"?<Pause size={18}/>:<Volume2 size={18}/>}</button>
         <button className={`icon-button ${current.bookmarks.includes(page)?"is-bookmarked":""}`} title="Đánh dấu trang" onClick={()=>setCurrent({...current,bookmarks:current.bookmarks.includes(page)?current.bookmarks.filter(n=>n!==page):[...current.bookmarks,page]})}><Bookmark size={18} fill={current.bookmarks.includes(page)?"currentColor":"none"}/></button>
+        {current.format==="epub"&&<a className="icon-button" title="Tải EPUB gốc" href={pdfUrl} download={current.title+".epub"}><Download size={18}/></a>}
         <button className="icon-button" title="Ghi chú" onClick={()=>setRightOpen(!rightOpen)}><StickyNote size={18}/></button>
       </div>
     </header>
