@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {test} from "node:test";
 import {isCardDue,makeStudyCard,reviewStudyCard} from "../src/lib/flashcards";
-import {collectKnowledge,searchKnowledge} from "../src/lib/knowledge";
+import {collectKnowledge,knowledgeToCsv,searchKnowledge,type KnowledgeEntry} from "../src/lib/knowledge";
 
 const now=new Date("2026-10-28T09:00:00Z");
 
@@ -30,4 +30,35 @@ test("collects notes from local, Gutenberg and cloud books and searches accents"
   assert.equal(searchKnowledge(result,"suy ngam").length,1);
   assert.equal(searchKnowledge(result,"", "gutenberg").length,1);
   assert.match(result.find(e=>e.source==="local")!.url,/book=a/);
+});
+
+
+test("Vietnamese uppercase Đ and scattered search terms match notes",()=>{
+  const item:KnowledgeEntry={
+    id:"n",source:"local",bookId:"b",bookTitle:"ĐẠO ĐỨC",
+    author:"Tác giả",quote:"Tư duy và đọc sách sâu hơn",note:"Đọc để suy ngẫm.",
+    page:2,color:"yellow",createdAt:"2026-11-05T09:00:00Z",url:"/demo"
+  };
+  assert.equal(searchKnowledge([item],"dao duc").length,1);
+  assert.equal(searchKnowledge([item],"tu duy sach").length,1);
+  assert.equal(searchKnowledge([item],'"tu duy" "doc sach"').length,1);
+  assert.equal(searchKnowledge([item],"tu duy khong co").length,0);
+  assert.equal(searchKnowledge([item],"dao","gutenberg").length,0);
+});
+
+test("CSV exports Vietnamese, escapes quotations and blocks formula execution",()=>{
+  const dangerous:KnowledgeEntry={
+    id:"x",source:"cloud",bookId:"b",bookTitle:"=SUM(1,1)",
+    author:"+cmd",quote:'Ghi chú "trích dẫn"',note:" \t=HYPERLINK(\"evil\")",
+    page:4,color:"yellow",createdAt:"2026-11-05T09:00:00Z",
+    url:"/books/b"
+  };
+  const csv=knowledgeToCsv([dangerous]);
+  assert.ok(csv.startsWith("\uFEFF"));
+  assert.ok(csv.includes('"\'=SUM(1,1)"'));
+  assert.ok(csv.includes('"\'+cmd"'));
+  assert.ok(csv.includes('Ghi chú ""trích dẫn""'));
+  assert.ok(csv.includes('"\x27 \t=HYPERLINK(""evil"")"'));
+  assert.match(csv,/Thư viện cloud/);
+  assert.ok(csv.endsWith("\r\n"));
 });

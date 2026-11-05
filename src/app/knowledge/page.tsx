@@ -10,7 +10,7 @@ import {
 import { configured, supabase } from "@/lib/supabase";
 import { listDemoBooks } from "@/lib/demo-store";
 import { listPublicBooks } from "@/lib/public-library";
-import { collectKnowledge, knowledgeToMarkdown, searchKnowledge, sourceLabels, type KnowledgeEntry, type KnowledgeSource } from "@/lib/knowledge";
+import { collectKnowledge, knowledgeToMarkdown, knowledgeToCsv, searchKnowledge, sourceLabels, type KnowledgeEntry, type KnowledgeSource } from "@/lib/knowledge";
 import { isCardDue, makeStudyCard, reviewStudyCard, type ReviewRating, type StudyCard } from "@/lib/flashcards";
 import { listStudyCards, putStudyCard, putStudyCards, removeStudyCard } from "@/lib/study-store";
 import { mergeStudyCards, parseStudyBackup, serializeStudyCards } from "@/lib/study-backup";
@@ -20,8 +20,8 @@ type FilterSource="all"|KnowledgeSource;
 type EditorState={sourceNoteId:string|null;question:string;answer:string;bookTitle:string;sourceUrl:string};
 const emptyEditor:EditorState={sourceNoteId:null,question:"",answer:"",bookTitle:"Ghi chú tự tạo",sourceUrl:"/knowledge"};
 const sources:[FilterSource,string][]=[["all","Tất cả"],["local","PDF / EPUB"],["gutenberg","Gutenberg"],["cloud","Cloud"]];
-function downloadText(name:string,content:string){
-  const url=URL.createObjectURL(new Blob([content],{type:"text/markdown;charset=utf-8"}));
+function downloadText(name:string,content:string,mime="text/markdown;charset=utf-8"){
+  const url=URL.createObjectURL(new Blob([content],{type:mime}));
   const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
   window.setTimeout(()=>URL.revokeObjectURL(url),2000);
 }
@@ -35,6 +35,7 @@ export default function KnowledgePage(){
   const [error,setError]=useState("");
   const [search,setSearch]=useState("");
   const [source,setSource]=useState<FilterSource>("all");
+  const [bookFilter,setBookFilter]=useState("all");
   const [editing,setEditing]=useState(false);
   const [editor,setEditor]=useState<EditorState>(emptyEditor);
   const [saving,setSaving]=useState(false);
@@ -78,7 +79,17 @@ export default function KnowledgePage(){
   },[]);
   useEffect(()=>{refresh()},[refresh]);
 
-  const filtered=useMemo(()=>searchKnowledge(entries,search,source),[entries,search,source]);
+  const booksForFilter=useMemo(()=>{
+    const options=new Map<string,string>();
+    entries.forEach(entry=>{
+      if(source!=="all"&&entry.source!==source)return;
+      options.set(entry.source+":"+entry.bookId,entry.bookTitle);
+    });
+    return [...options.entries()].sort((a,b)=>a[1].localeCompare(b[1],"vi"));
+  },[entries,source]);
+  const filtered=useMemo(()=>searchKnowledge(entries,search,source).filter(entry=>
+    bookFilter==="all"||entry.source+":"+entry.bookId===bookFilter
+  ),[entries,search,source,bookFilter]);
   const filteredBooks=useMemo(()=>new Set(filtered.map(e=>e.source+":"+e.bookId)).size,[filtered]);
   const due=useMemo(()=>cards.filter(card=>isCardDue(card)).sort((a,b)=>a.dueAt.localeCompare(b.dueAt)),[cards]);
   const nextCard=due[0];
@@ -201,10 +212,17 @@ export default function KnowledgePage(){
       {error&&<div role="alert" className="knowledge-alert">{error}</div>}
       {loading?<div className="knowledge-loading"><LoaderCircle className="spin" size={25}/> Đang tổng hợp ghi chú của bạn…</div>:activeTab==="notes"?<>
         <div className="knowledge-section-head"><div><span className="eyebrow">ALL YOUR THOUGHTS</span><h2>Những điều bạn đã ghi lại</h2></div>
-          <button className="outline-button" disabled={!filtered.length} onClick={()=>downloadText("docsachwithme-so-tay.md",knowledgeToMarkdown(filtered))}><Download size={16}/> Xuất sổ tay Markdown</button></div>
+          <div className="knowledge-export-actions">
+            <button className="outline-button" disabled={!filtered.length} onClick={()=>downloadText("docsachwithme-so-tay.csv",knowledgeToCsv(filtered),"text/csv;charset=utf-8")}><Download size={16}/> Xuất CSV</button>
+            <button className="outline-button" disabled={!filtered.length} onClick={()=>downloadText("docsachwithme-so-tay.md",knowledgeToMarkdown(filtered))}><Download size={16}/> Xuất Markdown</button>
+          </div></div>
         <div className="knowledge-toolbar"><div className="knowledge-search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Tìm đoạn trích, ghi chú, sách hoặc tác giả…" aria-label="Tìm kiếm ghi chú"/></div>
-          <div className="knowledge-filter"><Filter size={15}/><select value={source} aria-label="Nguồn sách" onChange={e=>setSource(e.target.value as FilterSource)}>
+          <div className="knowledge-filter"><Filter size={15}/><select value={source} aria-label="Nguồn sách" onChange={e=>{setSource(e.target.value as FilterSource);setBookFilter("all")}}>
             {sources.map(([value,title])=><option key={value} value={value}>{title}{value!=="all"&&entries.length?" ("+countBy(value)+")":""}</option>)}
+          </select></div>
+          <div className="knowledge-filter knowledge-book-filter"><BookOpen size={15}/><select aria-label="Lọc ghi chú theo sách" value={bookFilter} onChange={e=>setBookFilter(e.target.value)}>
+            <option value="all">Mọi cuốn sách</option>
+            {booksForFilter.map(([key,title])=><option key={key} value={key}>{title}</option>)}
           </select></div></div>
         <div className="knowledge-results-meta">{filtered.length} ghi chú · {filteredBooks} cuốn sách</div>
         {filtered.length?<div className="knowledge-grid">{filtered.map(entry=><article className="knowledge-note" key={entry.id}>
@@ -213,7 +231,7 @@ export default function KnowledgePage(){
           {entry.quote&&<blockquote>“{shorten(entry.quote,460)}”</blockquote>}
           {entry.note&&<p className="knowledge-thought"><NotebookPen size={14}/>{shorten(entry.note,500)}</p>}
           <div className="knowledge-note-foot"><Link href={entry.url}>Về đoạn sách <ArrowRight size={15}/></Link><button onClick={()=>startCard(entry)}><Plus size={15}/> Tạo flashcard</button></div>
-        </article>)}</div>:<div className="knowledge-empty"><NotebookPen size={33}/><h3>{search?"Không có ghi chú khớp tìm kiếm":"Sổ tay đang chờ những dòng đầu tiên"}</h3><p>Highlight một đoạn trong sách PDF/EPUB hoặc sách miễn phí; ghi chú sẽ xuất hiện ở đây.</p><div><Link href="/demo" className="outline-button">Đọc sách của tôi</Link><Link href="/discover" className="primary-button">Khám phá sách <ArrowRight size={16}/></Link></div></div>}
+        </article>)}</div>:<div className="knowledge-empty"><NotebookPen size={33}/><h3>{search||source!=="all"||bookFilter!=="all"?"Không có ghi chú khớp bộ lọc":"Sổ tay đang chờ những dòng đầu tiên"}</h3><p>Highlight một đoạn trong sách PDF/EPUB hoặc sách miễn phí; ghi chú sẽ xuất hiện ở đây.</p><div><Link href="/demo" className="outline-button">Đọc sách của tôi</Link><Link href="/discover" className="primary-button">Khám phá sách <ArrowRight size={16}/></Link></div></div>}
       </>:<>
         <div className="knowledge-section-head"><div><span className="eyebrow">REMEMBER WHAT MATTERS</span><h2>Ôn tập bằng flashcard</h2></div>
           <div className="knowledge-backup-actions">

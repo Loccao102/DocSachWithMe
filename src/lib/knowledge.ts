@@ -50,15 +50,38 @@ export function collectKnowledge(
     .sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
 }
 
+export function foldKnowledgeText(value:string):string{
+  return value.toLocaleLowerCase("vi").normalize("NFD")
+    .replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"d");
+}
+
 export function searchKnowledge(entries:KnowledgeEntry[],query:string,source:"all"|KnowledgeSource="all"):KnowledgeEntry[]{
-  const q=query.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"d").toLowerCase().trim();
+  const terms=(query.match(/"[^"]+"|\S+/g)||[])
+    .map(term=>foldKnowledgeText(term.replace(/^"|"$/g,"").trim()))
+    .filter(Boolean);
   return entries.filter(entry=>{
     if(source!=="all"&&entry.source!==source)return false;
-    if(!q)return true;
-    const text=`${entry.bookTitle} ${entry.author} ${entry.quote} ${entry.note}`
-      .normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"d").toLowerCase();
-    return text.includes(q);
+    if(!terms.length)return true;
+    const text=foldKnowledgeText(
+      [entry.bookTitle,entry.author,entry.quote,entry.note].join(" ")
+    );
+    return terms.every(term=>text.includes(term));
   });
+}
+
+/** RFC 4180 CSV for Excel/Sheets; neutralize spreadsheet formula injection. */
+export function knowledgeToCsv(entries:KnowledgeEntry[]):string{
+  const cell=(raw:string):string=>{
+    const value=String(raw).replace(/\u0000/g,"");
+    const safe=/^[\s\uFEFF]*[=+\-@]/.test(value)?"'"+value:value;
+    return '"'+safe.replace(/"/g,'""')+'"';
+  };
+  const header=["Nguồn","Sách","Tác giả","Trang","Trích dẫn","Ghi chú","Ngày lưu","Đường dẫn"];
+  const rows=entries.map(entry=>[
+    sourceLabels[entry.source],entry.bookTitle,entry.author,
+    String(entry.page),entry.quote,entry.note,entry.createdAt,entry.url
+  ]);
+  return "\uFEFF"+[header,...rows].map(row=>row.map(cell).join(",")).join("\r\n")+"\r\n";
 }
 
 export function knowledgeToMarkdown(entries:KnowledgeEntry[]):string{
