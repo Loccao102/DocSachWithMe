@@ -246,3 +246,16 @@ Trong /knowledge → Flashcard & ôn tập, khi đã cấu hình Supabase và đ
 Tính năng dùng chính bucket Storage private đã khai báo trong supabase/schema.sql, không cần migration mới, không cần OpenAI API key. Chỉ tài khoản có quyền theo RLS mới truy cập được. **Đây là sao lưu/khôi phục chủ động, không phải đồng bộ tự động hoặc cộng tác.** Xóa một thẻ trên thiết bị không tự xóa bản cloud cũ; muốn bản cloud phản ánh các thao tác xóa, hãy bấm Lưu cloud lần nữa.
 
 Trước khi đăng nhập tài khoản khác trên cùng một trình duyệt, hãy cân nhắc tách dữ liệu local hoặc dùng profile trình duyệt riêng: bộ flashcard trên IndexedDB là của thiết bị, không tự phân vùng theo người dùng Supabase.
+
+
+## OCR cho sách PDF lưu trên Supabase (cloud reader)
+
+Khi đã đăng nhập, mở một cuốn PDF từ thư viện cloud. Nếu sách là PDF scan hoặc còn trang thiếu text, nút **Nhận dạng văn bản OCR** xuất hiện ở thanh công cụ và sidebar.
+
+- Người đọc chủ động xác nhận mỗi lượt; OCR xử lý tối đa 8 trang thiếu chữ trên trình duyệt. Bộ ngôn ngữ Tesseract.js (vie/eng) có thể cần tải từ Internet lần đầu, nhưng ảnh trang PDF không được gửi tới dịch vụ OCR.
+- PDF gốc được tải từ Supabase Storage private bằng phiên đăng nhập hiện tại và **giữ nguyên**. Chỉ JSON văn bản OCR cập nhật trong cùng bucket private, theo thư mục chủ tài khoản.
+- Từ trang đã nhận dạng, người đọc có thể tìm kiếm, nghe đọc, highlight, ghi chú hoặc hỏi AI theo trích đoạn (khi có đủ từ).
+- Các trang PDF không trích xuất được text ở thời điểm upload cũng có thể nhận dạng, vì trình đọc có thể dựng cấu trúc trang từ PDF gốc. Không cần chạy SQL migration mới.
+- Khi lưu, hệ thống đọc lại bản JSON mới nhất để giữ mục lục và các trang đã OCR từ thiết bị khác; những đoạn đã có neo ghi chú OCR không bị ghi đè. **Không phải collaborative editing với khóa phiên bản tuyệt đối**: tránh xử lý cùng một cuốn ở hai thiết bị cùng lúc.
+- Nếu OCR không đọc được chữ, thử scan có độ phân giải tốt hơn; PDF có bảng, chữ viết tay hoặc scan mờ vẫn có thể cho kết quả sai. Bản gốc luôn dùng được để đối chiếu.
+- OCR chưa hỗ trợ EPUB vì EPUB có sẵn nội dung văn bản. Tệp sách 50 MB cần được tải xuống trình duyệt để xử lý OCR, nên kết nối và bộ nhớ thiết bị có thể ảnh hưởng tốc độ.

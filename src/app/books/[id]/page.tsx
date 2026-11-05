@@ -6,12 +6,13 @@ import {
   ArrowLeft, ArrowRight, BookHeart, BookMarked, BookOpen, Bookmark, NotebookPen,
   Check, ChevronDown, ChevronLeft, ChevronRight, FileText, Highlighter,
   List, LoaderCircle, Menu, MessageCircle, Minus, Moon, Search, Focus, Download, Copy, Volume2, Pause, Play, Square, PanelRightClose,
-  PanelRightOpen, Plus, Send, Settings2, Sparkles, StickyNote, Sun, Trash2, X
+  PanelRightOpen, Plus, ScanText, Send, Settings2, Sparkles, StickyNote, Sun, Trash2, X
 } from "lucide-react";
 import { AuthGate } from "@/components/AuthGate";
 import { requireSupabase } from "@/lib/supabase";
 import type { Book, BookBlock, BookDocument, ReaderBookmark, ReaderNote, ReadingProgress } from "@/lib/types";
 import { downloadNotesMarkdown } from "@/lib/export";
+import { mergeOcrDocuments, ocrCandidatePages, ocrLocalPdf } from "@/lib/ocr";
 import { useReadAloud } from "@/hooks/useReadAloud";
 
 type Panel = "notes" | "ai";
@@ -73,6 +74,9 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
   const [aiError,setAiError]=useState("");
   const [finished,setFinished]=useState(false);
   const [jumpInput,setJumpInput]=useState("1");
+  const [ocrBusy,setOcrBusy]=useState(false);
+  const [ocrStatus,setOcrStatus]=useState("");
+  const [ocrError,setOcrError]=useState("");
   const tts=useReadAloud();
   const scrollRef=useRef<HTMLDivElement>(null);
   const saveTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
@@ -125,7 +129,7 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
         const currentProgress=progress as ReadingProgress|null;
         const params=new URLSearchParams(window.location.search);
         const requestedBlock=params.get("block");
-        const fromBlock=requestedBlock?.match(/^p(\d+)-b\d+$/);
+        const fromBlock=requestedBlock?.match(/^p(\d+)-(?:b\d+|ocr\d+)$/);
         const requestedPage=fromBlock?Number(fromBlock[1]):Number(params.get("page"));
         const initialPage=Number.isInteger(requestedPage)&&requestedPage>0?
           Math.min(requestedPage,parsed?.totalPages||current.total_pages||requestedPage):currentProgress?.page||1;
@@ -169,6 +173,7 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
   },[documentData,searchTerm]);
   const isEpub=book?.file_path.toLowerCase().endsWith(".epub")||false;
   const totalPages=book?.total_pages||documentData?.totalPages||0;
+  const needsOcr=!isEpub&&(!documentData||ocrCandidatePages(documentData).length>0);
   const percent=finished?100:totalPages?Math.min(99,Math.round((page-1)/totalPages*100)):0;
   useEffect(()=>setJumpInput(String(page)),[page]);
   useEffect(()=>{
@@ -320,6 +325,64 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
     finally{setAsking(false);}
   }
 
+  async function recognizeCloudPages(){
+    if(!book||isEpub||ocrBusy)return;
+    if(!window.confirm("Nhận dạng tối đa 8 trang PDF thiếu chữ bằng OCR trên thiết bị này? Bộ ngôn ngữ có thể tải qua mạng, nhưng nội dung trang sách không gửi đến dịch vụ OCR."))return;
+    const client=requireSupabase();
+    setOcrBusy(true);setOcrError("");setOcrStatus("Đang tải PDF từ thư viện riêng tư…");
+    try{
+      const {data:{user:identity},error:identityError}=await client.auth.getUser();
+      if(identityError||identity?.id!==user.id||book.owner_id!==user.id)
+        throw new Error("Phiên đăng nhập không còn quyền truy cập cuốn sách.");
+      const storage=client.storage.from("books");
+      const {data:pdf,error:pdfError}=await storage.download(book.file_path);
+      if(pdfError||!pdf)throw new Error("Không tải được PDF gốc từ kho riêng tư.");
+      async function readCurrentText(path:string|null):Promise<BookDocument|null>{
+        if(!path)return null;
+        const {data:blob,error:downloadError}=await storage.download(path);
+        if(downloadError||!blob)throw new Error("Không đọc được bản văn cloud mới nhất. Hãy tải lại trang.");
+        let parsed:BookDocument;
+        try{parsed=JSON.parse(await blob.text()) as BookDocument;}
+        catch{throw new Error("Bản văn cloud không hợp lệ. Hãy tải lại sách.");}
+        if(!parsed||parsed.version!==1||!Number.isInteger(parsed.totalPages)||
+          !Array.isArray(parsed.pages)||!Array.isArray(parsed.toc))
+          throw new Error("Bản văn cloud có cấu trúc không hợp lệ.");
+        return parsed;
+      }
+      const original=(await readCurrentText(book.text_path))||documentData;
+      const result=await ocrLocalPdf(pdf,original,(done,total,label)=>{
+        setOcrStatus(label+" ("+done+"/"+total+")");
+      });
+      if(!result.recognized){
+        setOcrStatus("Chưa nhận dạng được văn bản mới. Thử scan rõ hơn hoặc tiếp tục đọc PDF gốc.");
+        return;
+      }
+      // Re-read before writing, so newer OCR paragraphs and manually edited TOC survive.
+      const newest=await readCurrentText(book.text_path);
+      const merged=mergeOcrDocuments(newest,result.document);
+      const textPath=book.text_path||user.id+"/"+bookId+".json";
+      const payload=new Blob([JSON.stringify(merged)],{type:"application/json"});
+      const {error:uploadError}=await storage.upload(textPath,payload,{
+        contentType:"application/json",upsert:true
+      });
+      if(uploadError)throw new Error("Không lưu được văn bản OCR lên cloud: "+uploadError.message);
+      const {data:updated,error:updateError}=await client.from("books").update({
+        text_path:textPath,word_count:merged.wordCount,total_pages:merged.totalPages
+      }).eq("id",bookId).eq("owner_id",user.id).select("id").maybeSingle();
+      if(updateError||!updated)throw new Error(
+        "Văn bản đã tải lên Storage nhưng chưa cập nhật được thông tin sách. Tải lại trang để kiểm tra trạng thái."
+      );
+      setDocumentData(merged);
+      setBook(previous=>previous?{
+        ...previous,text_path:textPath,word_count:merged.wordCount,total_pages:merged.totalPages
+      }:previous);
+      if(merged.wordCount>0)setView("reflow");
+      setOcrStatus("Đã xử lý "+result.recognized+"/"+result.attempted+
+        " trang. Văn bản đã lưu trên cloud và có thể dùng để tìm kiếm, ghi chú, nghe đọc và hỏi AI khi đủ nội dung.");
+    }catch(err){setOcrError(err instanceof Error?err.message:"Không thể thực hiện OCR.");}
+    finally{setOcrBusy(false);}
+  }
+
   function renderText(block:BookBlock) {
     const relevant=notes.filter(n=>n.block_id===block.id && n.quote).map(n=>({...n,index:block.text.indexOf(n.quote)})).filter(n=>n.index>=0).sort((a,b)=>a.index-b.index);
     const nodes:React.ReactNode[]=[];
@@ -352,6 +415,7 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
       <button className="icon-button" title="Mục lục" onClick={()=>setLeftOpen(!leftOpen)}><Menu size={19}/></button><div className="reader-book-identity"><strong>{book.title}</strong><span>{book.author||"Thư viện của tôi"}</span></div><button className="icon-button" title="Sổ tay ghi chú" onClick={()=>router.push("/knowledge")}><NotebookPen size={18}/></button></div>
       <div className="reader-top-mid"><div className="reader-view-switch"><button className={view==="reflow"?"selected":""} onClick={()=>setView("reflow")} disabled={!documentData?.wordCount}><BookOpen size={15}/> Sách điện tử</button>{!isEpub&&<button className={view==="original"?"selected":""} onClick={()=>setView("original")}><FileText size={15}/> PDF gốc</button>}{isEpub&&<a className="reader-source-download" href={pdfUrl} download={book.title+".epub"} title="Tải EPUB gốc"><Download size={15}/> EPUB gốc</a>}</div></div>
       <div className="reader-top-right">
+        {needsOcr&&<button className="icon-button" title="Nhận dạng OCR những trang PDF thiếu chữ" disabled={ocrBusy} onClick={()=>void recognizeCloudPages()}><ScanText size={19}/></button>}
         <button className="icon-button" title="Tìm trong sách (/)" disabled={!documentData?.wordCount} onClick={()=>{setSearchOpen(true);setFocusMode(false)}}><Search size={19}/></button>
         <button className="icon-button" title="Chế độ tập trung (F)" onClick={()=>setFocusMode(!focusMode)}><Focus size={19}/></button>
         <button className="icon-button" title="Nghe đọc trang hiện tại" disabled={!documentData?.wordCount || !tts.available} onClick={()=>tts.state==="idle"?speakPage():tts.pauseOrResume()}>{tts.state==="playing"?<Pause size={18}/>:<Volume2 size={19}/>}</button>
@@ -369,6 +433,11 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
         <button className="icon-button sidebar-toggle" title="Bảng ghi chú" onClick={()=>setRightOpen(!rightOpen)}>{rightOpen?<PanelRightClose size={20}/>:<PanelRightOpen size={20}/>}</button>
       </div>
     </header>
+    {(ocrStatus||ocrError)&&<div role={ocrError?"alert":"status"} className="ocr-status">
+      <ScanText size={16}/><span>{ocrError||ocrStatus}</span>
+      {ocrBusy&&<LoaderCircle className="spin" size={16}/>}
+      <button className="icon-button small" title="Đóng thông báo OCR" onClick={()=>{if(!ocrBusy){setOcrStatus("");setOcrError("");}}} disabled={ocrBusy}><X size={15}/></button>
+    </div>}
     {focusMode && <button className="focus-exit" onClick={()=>setFocusMode(false)}><Focus size={15}/> Thoát tập trung (Esc)</button>}
     <div className="reader-body">
       {leftOpen && <aside className="reader-left">
@@ -377,7 +446,11 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
         <div className="toc-list">{sections.length ? sections.map((chapter,index)=><button key={index} className={sectionIndex===index?"selected":""} onClick={()=>{navigateTo(chapter.start,chapter.blockId);if(window.innerWidth<800)setLeftOpen(false)}}><span>{(index+1).toString().padStart(2,"0")}</span><span>{chapter.title}</span></button>):<p className="empty-side-text">Dùng chế độ PDF gốc để xem mục lục theo tài liệu.</p>}</div>
         <div className="bookmarks-area"><div className="toc-heading"><Bookmark size={17}/><strong>Trang đã lưu</strong><span>{bookmarks.length}</span></div>
         {bookmarks.length ? bookmarks.map(item=><button key={item.id} className="bookmark-entry" onClick={()=>navigateTo(item.page,item.block_id)}>Trang {item.page}<ChevronRight size={14}/></button>):<p className="empty-side-text">Bấm biểu tượng đánh dấu trang để quay lại sau.</p>}</div>
-        {Boolean(documentData?.analysis?.scannedPages.length) && <p className="pdf-quality-tip">{documentData?.analysis?.scannedPages.length} trang chưa có văn bản. Hãy kiểm tra bản PDF gốc; những trang dạng ảnh cần OCR.</p>}
+        {needsOcr&&<div className="pdf-quality-tip">
+          <p>{documentData?ocrCandidatePages(documentData).length+" trang thiếu chữ.":"PDF chưa có dữ liệu đọc dạng ebook."} Bạn có thể nhận dạng OCR ngay trên thiết bị rồi lưu lại lên cloud.</p>
+          <button type="button" className="outline-button" disabled={ocrBusy} onClick={()=>void recognizeCloudPages()}><ScanText size={15}/>{ocrBusy?"Đang OCR…":"Nhận dạng văn bản OCR"}</button>
+          <small>8 trang/lượt, cần tải bộ ngôn ngữ lần đầu. PDF gốc vẫn được giữ nguyên.</small>
+        </div>}
         <div className="reading-stat"><span>TIẾN ĐỘ ĐỌC</span><div className="stat-percent"><strong>{percent}%</strong><small>{page}/{totalPages||"?"} trang</small></div><div className="progress-track"><span style={{width:`${percent}%`}}/></div></div>
       </aside>}
       <main className="reader-content" ref={scrollRef}>
