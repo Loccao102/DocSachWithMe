@@ -10,6 +10,14 @@ export function ocrCandidatePages(document: BookDocument): number[] {
   ).map(page => page.page);
 }
 
+/** Rotate over missing-text pages so blank/illegible scans cannot block later pages. */
+export function nextOcrBatch(document:BookDocument,afterPage=0,limit=8):number[]{
+  const missing=ocrCandidatePages(document);
+  const count=Math.min(8,Math.max(1,Number.isInteger(limit)?limit:8));
+  const cursor=Number.isFinite(afterPage)?afterPage:0;
+  return [...missing.filter(page=>page>cursor),...missing.filter(page=>page<=cursor)].slice(0,count);
+}
+
 /** Keep original page anchors and preserve any manually edited table of contents. */
 export function addOcrPage(document: BookDocument, pageNumber: number, rawText: string): BookDocument {
   const page = document.pages.find(item => item.page === pageNumber);
@@ -102,8 +110,9 @@ export function mergeOcrDocuments(latest:BookDocument|null,incoming:BookDocument
  */
 export async function ocrLocalPdf(
   file: Blob, original: BookDocument | null,
-  onProgress?: (done: number, total: number, label: string) => void
-): Promise<{ document: BookDocument; recognized: number; attempted: number }> {
+  onProgress?: (done: number, total: number, label: string) => void,
+  afterPage=0
+): Promise<{ document: BookDocument; recognized: number; attempted: number; lastAttemptedPage: number }> {
   if (typeof document === "undefined") throw new Error("OCR chỉ chạy trong trình duyệt.");
   const pdfjs=await import("pdfjs-dist");
   pdfjs.GlobalWorkerOptions.workerSrc=new URL("pdfjs-dist/build/pdf.worker.min.mjs",import.meta.url).toString();
@@ -112,8 +121,8 @@ export async function ocrLocalPdf(
     const source=original??emptyOcrDocument(pdf.numPages);
     if(source.totalPages!==pdf.numPages)
       throw new Error("Số trang PDF không khớp với nội dung đã lưu; không thể tiếp tục OCR.");
-    const candidates=ocrCandidatePages(source).slice(0,MAX_PAGES_PER_RUN);
-    if(!candidates.length)return {document:source,recognized:0,attempted:0};
+    const candidates=nextOcrBatch(source,afterPage,MAX_PAGES_PER_RUN);
+    if(!candidates.length)return {document:source,recognized:0,attempted:0,lastAttemptedPage:afterPage};
     const {createWorker}=await import("tesseract.js");
     let worker:Awaited<ReturnType<typeof createWorker>>|undefined;
     let result=source;
@@ -146,7 +155,7 @@ export async function ocrLocalPdf(
         }finally{page.cleanup();}
         onProgress?.(index+1,candidates.length,"Đã xử lý "+(index+1)+"/"+candidates.length+" trang");
       }
-      return {document:result,recognized,attempted:candidates.length};
+      return {document:result,recognized,attempted:candidates.length,lastAttemptedPage:candidates[candidates.length-1]};
     }finally{await worker?.terminate();}
   }finally{await pdf.destroy();}
 }

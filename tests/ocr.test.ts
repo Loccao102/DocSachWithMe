@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addOcrPage, emptyOcrDocument, mergeOcrDocuments, ocrCandidatePages } from "../src/lib/ocr";
+import { addOcrPage, emptyOcrDocument, mergeOcrDocuments, nextOcrBatch, ocrCandidatePages } from "../src/lib/ocr";
 import type { BookDocument } from "../src/lib/types";
 
 const doc: BookDocument = {
@@ -75,4 +75,21 @@ test("cloud merge never destroys existing OCR anchors or typed content",()=>{
   }]}]};
   assert.deepEqual(mergeOcrDocuments(manual,another).pages[0],manual.pages[0]);
   assert.throws(()=>mergeOcrDocuments(emptyOcrDocument(2),another),/Số trang/);
+});
+
+
+test("OCR batch rotates beyond unreadable first pages and wraps safely",()=>{
+  const blank=emptyOcrDocument(20);
+  assert.deepEqual(nextOcrBatch(blank),[1,2,3,4,5,6,7,8]);
+  assert.deepEqual(nextOcrBatch(blank,8),[9,10,11,12,13,14,15,16]);
+  assert.deepEqual(nextOcrBatch(blank,16),[17,18,19,20,1,2,3,4]);
+  assert.deepEqual(nextOcrBatch(blank,8,3),[9,10,11]);
+  assert.deepEqual(nextOcrBatch(blank,999),[1,2,3,4,5,6,7,8]);
+});
+
+test("OCR rotating batch skips pages already extracted but includes failures",()=>{
+  const blank=emptyOcrDocument(11);
+  const completed=addOcrPage(blank,3,"Đây là trang đã nhận dạng có đoạn văn đủ dài để không phải thử OCR lại.");
+  assert.deepEqual(nextOcrBatch(completed,2,4),[4,5,6,7]);
+  assert.deepEqual(nextOcrBatch(completed,10,4),[11,1,2,4]);
 });

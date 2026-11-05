@@ -269,3 +269,8 @@ Hai định dạng xuất dữ liệu:
 - **CSV:** chứa nguồn, sách, tác giả, trang, trích dẫn, ghi chú, ngày lưu, đường dẫn gốc để nhập vào Excel/Google Sheets. File có BOM UTF-8 để hạn chế lỗi tiếng Việt. Giá trị bắt đầu bằng cú pháp bảng tính nguy hiểm sẽ được chuyển thành text để tránh thực thi công thức khi mở file.
 
 Việc xuất chỉ lấy các ghi chú đang khớp bộ lọc, thực hiện trên trình duyệt; không tải dữ liệu lên bên thứ ba.
+
+
+## OCR nhiều lượt cho sách scan dài
+
+Đối với PDF có trên 8 trang cần OCR, mỗi lần bấm **Nhận dạng OCR** xử lý tối đa 8 trang, rồi lưu vị trí trang cuối đã thử. Lần tiếp theo ưu tiên nhóm trang **sau** vị trí đó, kể cả khi nhóm trước có trang trắng hoặc scan quá mờ nên nhận dạng không thành công. Khi đến cuối sách, hệ thống quay vòng tới các trang còn thiếu. Chuyển sang cuốn khác sẽ đặt lại vị trí OCR. Điều này giúp hoàn thành từng phần của sách dài mà không bị mắc kẹt ở trang đầu; không phải xử lý tự động liên tục trong nền.

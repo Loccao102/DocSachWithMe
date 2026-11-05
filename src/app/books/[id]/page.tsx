@@ -76,7 +76,9 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
   const [jumpInput,setJumpInput]=useState("1");
   const [ocrBusy,setOcrBusy]=useState(false);
   const [ocrStatus,setOcrStatus]=useState("");
+  const [ocrLastPage,setOcrLastPage]=useState(0);
   const [ocrError,setOcrError]=useState("");
+  useEffect(()=>setOcrLastPage(0),[bookId]);
   const tts=useReadAloud();
   const scrollRef=useRef<HTMLDivElement>(null);
   const saveTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
@@ -352,7 +354,8 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
       const original=(await readCurrentText(book.text_path))||documentData;
       const result=await ocrLocalPdf(pdf,original,(done,total,label)=>{
         setOcrStatus(label+" ("+done+"/"+total+")");
-      });
+      },ocrLastPage);
+      setOcrLastPage(result.lastAttemptedPage);
       if(!result.recognized){
         setOcrStatus("Chưa nhận dạng được văn bản mới. Thử scan rõ hơn hoặc tiếp tục đọc PDF gốc.");
         return;
