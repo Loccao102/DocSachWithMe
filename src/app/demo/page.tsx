@@ -3,9 +3,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft, ArrowRight, BookHeart, BookOpen, Bookmark, Check, ChevronLeft, ChevronRight,
   Cloud, Download, FileText, Focus, Highlighter, LibraryBig, List, LoaderCircle,
-  Menu, Minus, Moon, Plus, Search, Globe2, Settings2, StickyNote, Sun, Trash2, UploadCloud, Volume2, Pause, Play, Square, Pencil, X
+  Menu, Minus, Moon, Plus, Search, Globe2, Settings2, StickyNote, Sun, Trash2, UploadCloud, Volume2, Pause, Play, Square, Pencil, ScanText, X
 } from "lucide-react";
 import { extractPdf } from "@/lib/pdf";
+import { ocrCandidatePages, ocrLocalPdf } from "@/lib/ocr";
 import { extractEpub } from "@/lib/epub";
 import { useReadAloud } from "@/hooks/useReadAloud";
 import { NotebookPen } from "lucide-react";
@@ -36,6 +37,8 @@ function DemoApp(){
   const [loading,setLoading]=useState(true);
   const [uploading,setUploading]=useState(false);
   const [uploadLabel,setUploadLabel]=useState("");
+  const [ocrBusy,setOcrBusy]=useState(false);
+  const [ocrLabel,setOcrLabel]=useState("");
   const [message,setMessage]=useState("");
   const [page,setPage]=useState(1);
   const [jumpInput,setJumpInput]=useState("1");
@@ -170,6 +173,24 @@ function DemoApp(){
     }catch(error){setMessage(error instanceof Error?error.message:"Không đọc được PDF. Vui lòng thử lại.");}
     finally{setUploading(false);setUploadLabel("");if(fileRef.current)fileRef.current.value="";}
   }
+  async function recognizeMissingText(){
+    if(!current || current.format==="epub" || !current.document || ocrBusy)return;
+    const missing=ocrCandidatePages(current.document);
+    if(!missing.length){setOcrLabel("Không còn trang cần nhận dạng OCR.");return;}
+    if(!window.confirm("OCR xử lý tối đa 8 trang thiếu chữ mỗi lượt. Trình duyệt có thể tải bộ dữ liệu ngôn ngữ, nhưng không tải nội dung PDF lên dịch vụ OCR. Tiếp tục?"))return;
+    setOcrBusy(true);setOcrLabel("Đang khởi tạo OCR…");setMessage("");
+    try{
+      const result=await ocrLocalPdf(current.pdf,current.document,(done,total,label)=>setOcrLabel(label+" ("+done+"/"+total+")"));
+      const updated={...current,document:result.document};
+      await saveDemoBook(updated);
+      setCurrent(updated);
+      setBooks(previous=>previous.map(book=>book.id===updated.id?updated:book));
+      if(result.recognized>0)setView("reflow");
+      setOcrLabel("Đã nhận dạng "+result.recognized+"/"+result.attempted+" trang. "+
+        (ocrCandidatePages(result.document).length?"Có thể tiếp tục nếu còn trang thiếu chữ.":"Đã xử lý hết trang thiếu chữ."));
+    }catch(error){setOcrLabel(error instanceof Error?error.message:"Không thể nhận dạng OCR. Kiểm tra mạng để tải bộ ngôn ngữ.");}
+    finally{setOcrBusy(false);}
+  }
   async function saveBackup(book:DemoBook){
     setMessage("");setExportingId(book.id);
     try{await exportDemoBackup(book);}catch(error){setMessage(error instanceof Error?error.message:"Không thể tạo bản sao lưu.");}
@@ -265,6 +286,8 @@ function DemoApp(){
       <div className="reader-top-left"><button className="icon-button" title="Về thư viện" onClick={goBack}><ArrowLeft size={19}/></button><button className="icon-button" title="Mục lục" onClick={()=>setLeftOpen(!leftOpen)}><Menu size={19}/></button><div className="reader-book-identity"><strong>{current.title}</strong><span>Thư viện thử trên thiết bị</span></div><a href="/knowledge" className="icon-button" title="Mở sổ tay ghi chú"><NotebookPen size={18}/></a></div>
       <div className="reader-top-mid"><div className="reader-view-switch"><button className={view==="reflow"?"selected":""} onClick={()=>setView("reflow")} disabled={!current.document?.wordCount}><BookOpen size={15}/> Ebook</button>{current.format!=="epub"&&<button className={view==="original"?"selected":""} onClick={()=>setView("original")}><FileText size={15}/> PDF</button>}</div></div>
       <div className="reader-top-right">
+        {current.format!=="epub" && Boolean(current.document && ocrCandidatePages(current.document).length) &&
+          <button className="icon-button" disabled={ocrBusy} title="Nhận dạng OCR các trang PDF thiếu chữ" onClick={()=>void recognizeMissingText()}><ScanText size={18}/></button>}
         <button className="icon-button" title="Tìm từ trong sách (/)" onClick={()=>{setSearchOpen(true);setFocus(false)}} disabled={!current.document?.wordCount}><Search size={18}/></button>
         <button className="icon-button" title="Tập trung (F)" onClick={()=>setFocus(!focus)}><Focus size={18}/></button>
         <button className="icon-button" title="Nghe đọc trang hiện tại" disabled={!current.document?.wordCount || !tts.available} onClick={()=>tts.state==="idle"?tts.play(blocks.map(block=>({id:block.id,text:block.text}))):tts.pauseOrResume()}>{tts.state==="playing"?<Pause size={18}/>:<Volume2 size={18}/>}</button>
@@ -273,6 +296,7 @@ function DemoApp(){
         <button className="icon-button" title="Ghi chú" onClick={()=>setRightOpen(!rightOpen)}><StickyNote size={18}/></button>
       </div>
     </header>
+    {ocrLabel && <div role="status" className="ocr-status"><ScanText size={16}/><span>{ocrLabel}</span>{ocrBusy&&<LoaderCircle className="spin" size={16}/>}<button className="icon-button small" title="Đóng thông báo OCR" onClick={()=>setOcrLabel("")}><X size={15}/></button></div>}
     {focus&&<button className="focus-exit" onClick={()=>setFocus(false)}>Thoát tập trung (Esc)</button>}
     <div className="reader-body">
       {leftOpen&&<aside className="reader-left demo-nav-side">
@@ -281,7 +305,13 @@ function DemoApp(){
         <div className="toc-list">{toc.length?toc.map((section,index)=><button key={index} className={page===section.page?"selected":""} onClick={()=>{turnTo(section.page,section.blockId);if(window.innerWidth<800)setLeftOpen(false)}}><span>{String(index+1).padStart(2,"0")}</span><span>{section.title}</span></button>):<p className="empty-side-text">Chưa nhận dạng được tên chương. Bạn vẫn có thể chuyển từng trang.</p>}</div>
         <div className="bookmarks-area"><div className="toc-heading"><Bookmark size={17}/><strong>Trang lưu</strong></div>
           {current.bookmarks.slice().sort((a,b)=>a-b).map(value=><button className="bookmark-entry" key={value} onClick={()=>turnTo(value)}>Trang {value}<ChevronRight size={14}/></button>)}</div>
-        {Boolean(current.document?.analysis?.scannedPages.length) && <p className="pdf-quality-tip">Có {current.document?.analysis?.scannedPages.length} trang không có văn bản. Chế độ PDF gốc giữ nguyên hình ảnh và bố cục.</p>}
+        {current.format!=="epub" && current.document && ocrCandidatePages(current.document).length>0 &&
+          <div className="pdf-quality-tip">Có {ocrCandidatePages(current.document).length} trang thiếu văn bản.
+            <button type="button" className="outline-button" disabled={ocrBusy} onClick={()=>void recognizeMissingText()}>
+              <ScanText size={15}/> {ocrBusy?"Đang nhận dạng…":"Nhận dạng OCR"}
+            </button>
+            <small>Chạy trong trình duyệt, tối đa 8 trang mỗi lượt. Cần tải bộ ngôn ngữ khi dùng lần đầu.</small>
+          </div>}
         <div className="reading-stat"><span>TIẾN ĐỘ</span><div className="stat-percent"><strong>{Math.round((page-1)/Math.max(current.document?.totalPages||page,1)*100)}%</strong><small>{page}/{current.document?.totalPages||"?"} trang</small></div><div className="progress-track"><span style={{width:`${Math.round((page-1)/Math.max(current.document?.totalPages||page,1)*100)}%`}}/></div></div>
       </aside>}
       <main className="reader-content" ref={readerRef}>
