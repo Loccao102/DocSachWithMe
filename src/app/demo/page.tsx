@@ -15,6 +15,7 @@ import TocEditor from "@/components/TocEditor";
 import { exportDemoBackup, importDemoBackup } from "@/lib/backup";
 import { deleteDemoBook, getDemoBook, listDemoBooks, saveDemoBook, type DemoBook, type DemoNote } from "@/lib/demo-store";
 import type { BookBlock } from "@/lib/types";
+import {orderLibraryBooks,readingPercent,selectContinueBook,type LibrarySort} from "@/lib/demo-library";
 
 type ReaderTheme="cream"|"white"|"dark";
 const colors=["#9c766e","#718578","#9c8d6d","#6c8292","#b57e61","#716f8a"];
@@ -34,6 +35,8 @@ function exportMarkdown(book:DemoBook){
 }
 function DemoApp(){
   const [books,setBooks]=useState<DemoBook[]>([]);
+  const [librarySearch,setLibrarySearch]=useState("");
+  const [librarySort,setLibrarySort]=useState<LibrarySort>("recent");
   const [current,setCurrent]=useState<DemoBook|null>(null);
   const [loading,setLoading]=useState(true);
   const [uploading,setUploading]=useState(false);
@@ -61,12 +64,15 @@ function DemoApp(){
   const [tocEditing,setTocEditing]=useState(false);
   const fileRef=useRef<HTMLInputElement>(null);
   const restoreRef=useRef<HTMLInputElement>(null);
+  const librarySearchRef=useRef<HTMLInputElement>(null);
   const [restoring,setRestoring]=useState(false);
   const [exportingId,setExportingId]=useState<string|null>(null);
   const readerRef=useRef<HTMLElement>(null);
   const linkedBlockRef=useRef<string|null>(null);
   const activeRef=useRef<DemoBook|null>(null);
   const pdfUrl=useMemo(()=>current?.pdf?URL.createObjectURL(current.pdf):"",[current?.id,current?.pdf]);
+  const visibleBooks=useMemo(()=>orderLibraryBooks(books,librarySearch,librarySort),[books,librarySearch,librarySort]);
+  const continueBook=useMemo(()=>selectContinueBook(books),[books]);
   useEffect(()=>{void prepareDemoOffline().then(setShellCached).catch(()=>{});},[]);
   useEffect(()=>()=>{if(pdfUrl)URL.revokeObjectURL(pdfUrl)},[pdfUrl]);
   useEffect(()=>{
@@ -139,14 +145,17 @@ function DemoApp(){
     tts.stop();
     const max=current.document?.totalPages||Math.max(page,1);
     const target=Math.min(Math.max(1,value),max);
-    setPage(target);setJumpInput(String(target));setCurrent({...current,page:target});
+    setPage(target);setJumpInput(String(target));setCurrent({...current,page:target,lastOpenedAt:new Date().toISOString()});
     readerRef.current?.scrollTo({top:0,behavior:"smooth"});
     if(blockId)setTimeout(()=>document.getElementById("demo-"+blockId)?.scrollIntoView({behavior:"smooth",block:"center"}),80);
   }
   function openBook(book:DemoBook){
     tts.stop();
     setOcrLastPage(0);
-    setCurrent(book);activeRef.current=book;setPage(book.page||1);setRightOpen(false);setSearch("");setSearchOpen(false);setFocus(false);setLeftOpen(window.innerWidth>=800);
+    const opened={...book,lastOpenedAt:new Date().toISOString()};
+    setCurrent(opened);activeRef.current=opened;setPage(book.page||1);
+    setBooks(previous=>previous.map(item=>item.id===opened.id?opened:item));
+    void saveDemoBook(opened).catch(()=>setMessage("Không lưu được lần mở sách gần nhất."));setRightOpen(false);setSearch("");setSearchOpen(false);setFocus(false);setLeftOpen(window.innerWidth>=800);
     setView(book.format==="epub"?"reflow":book.document?.wordCount?"reflow":"original");
   }
   async function onFile(file:File|undefined){
