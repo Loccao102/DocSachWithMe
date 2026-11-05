@@ -294,3 +294,13 @@ Trang `/demo` tự đăng ký service worker phạm vi **chỉ `/demo`** trên H
 - Lần đầu tải ngôn ngữ OCR Tesseract vẫn cần mạng. Một số thư viện hoặc tài nguyên chưa được nạp có thể thiếu khi offline. Dùng ZIP backup để bảo vệ dữ liệu; trình duyệt có thể dọn IndexedDB/Cache Storage khi thiếu dung lượng.
 - Khi triển khai phiên bản mới, file `/sw.js` không được cache bởi CDN; cache cũ chỉ được xóa trong namespace `docsach-demo-` khi service worker kích hoạt. Xóa dữ liệu trang trong browser sẽ xóa cả sách local và shell.
 - Đây là cache offline có giới hạn cho Reader local, không phải PWA bao trọn các luồng cloud hoặc đồng bộ hai chiều.
+
+## Nhập ghi chú offline lên cloud (append-only, thủ công)
+
+Khi đọc sách đã đăng nhập tại `/books/[id]`, mở thanh bên trái và chọn **Nhập ghi chú offline**. Ứng dụng tìm bản sao cuốn sách từ IndexedDB `/demo`, đọc ghi chú/bookmark cloud mới nhất và hiển thị số lượng sắp thêm trước khi yêu cầu xác nhận.
+
+- Chỉ ghi **ghi chú có UUID, neo đoạn văn còn tồn tại trong bản văn cloud** và các trang bookmark chưa có trên cloud. Không cập nhật tiến độ đọc, không ghi đè ghi chú, không xóa bất kỳ dữ liệu cloud nào.
+- Nếu cùng ID ghi chú nhưng hai nơi có nội dung khác nhau, hệ thống **bỏ qua ghi chú offline đó** và đếm xung đột; ghi chú cloud giữ nguyên. Những đoạn OCR mới chỉ có ở bản offline mà chưa xuất hiện trong ebook cloud cũng được bỏ qua để tránh tạo neo hỏng.
+- Dùng `upsert(..., ignoreDuplicates: true)` cho note ID và bookmark block ID nên thao tác lặp lại không tạo bản ghi trùng cùng khóa. Nếu lỗi giữa hai bước, một phần dữ liệu có thể đã lên cloud; tải lại trang để đối chiếu trước khi thử lại.
+- Bản offline được giữ nguyên. Đây là đồng bộ **một chiều, thủ công và chỉ thêm** ghi chú/bookmark; không phải đồng bộ hai chiều tự động, và không tự giải quyết nội dung xung đột.
+- Quyền lưu trên Supabase do RLS kiểm tra theo chủ sở hữu sách và tài khoản đăng nhập. Không có service role key trong frontend.

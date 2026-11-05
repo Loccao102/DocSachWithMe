@@ -6,7 +6,7 @@ import {
   ArrowLeft, ArrowRight, BookHeart, BookMarked, BookOpen, Bookmark, NotebookPen,
   Check, ChevronDown, ChevronLeft, ChevronRight, FileText, Highlighter,
   List, LoaderCircle, Menu, MessageCircle, Minus, Moon, Search, Focus, Download, HardDriveDownload, Copy, Volume2, Pause, Play, Square, PanelRightClose,
-  PanelRightOpen, Plus, ScanText, Send, Settings2, Sparkles, StickyNote, Sun, Trash2, X
+  PanelRightOpen, Plus, ScanText, Send, Settings2, Sparkles, StickyNote, Sun, Trash2, UploadCloud, X
 } from "lucide-react";
 import { AuthGate } from "@/components/AuthGate";
 import { requireSupabase } from "@/lib/supabase";
@@ -16,6 +16,7 @@ import { mergeOcrDocuments, ocrCandidatePages, ocrLocalPdf } from "@/lib/ocr";
 import { useReadAloud } from "@/hooks/useReadAloud";
 import { createOfflineBook, offlineBookId } from "@/lib/offline-book";
 import { getDemoBook, saveDemoBook } from "@/lib/demo-store";
+import { planOfflineImport } from "@/lib/offline-note-import";
 
 type Panel = "notes" | "ai";
 type Theme = "cream" | "white" | "dark";
@@ -83,6 +84,8 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
   const [offlineBusy,setOfflineBusy]=useState(false);
   const [offlineMessage,setOfflineMessage]=useState("");
   const [offlineSaved,setOfflineSaved]=useState(false);
+  const [offlineMergeBusy,setOfflineMergeBusy]=useState(false);
+  const [offlineMergeStatus,setOfflineMergeStatus]=useState("");
   useEffect(()=>setOcrLastPage(0),[bookId]);
   const tts=useReadAloud();
   const scrollRef=useRef<HTMLDivElement>(null);
@@ -392,7 +395,7 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
   }
 
   async function saveOfflineSnapshot(){
-    if(!book||offlineBusy||ocrBusy)return;
+    if(!book||offlineBusy||offlineMergeBusy||ocrBusy)return;
     setOfflineMessage("");
     setOfflineSaved(false);
     setOfflineBusy(true);
@@ -419,6 +422,71 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
     }catch(err){
       setOfflineMessage(err instanceof Error?err.message:"Không lưu được sách offline. Kiểm tra dung lượng trình duyệt.");
     }finally{setOfflineBusy(false);}
+  }
+
+  async function importOfflineAnnotations(){
+    if(!book||offlineMergeBusy||offlineBusy||ocrBusy)return;
+    setOfflineMergeBusy(true);
+    setOfflineMergeStatus("");
+    let changed=false;
+    try{
+      const local=await getDemoBook(offlineBookId(bookId));
+      if(!local)throw new Error("Không tìm thấy bản offline của sách này trong trình duyệt.");
+      const client=requireSupabase();
+      const {data:{user:identity},error:authError}=await client.auth.getUser();
+      if(authError||identity?.id!==user.id||book.owner_id!==user.id)
+        throw new Error("Phiên đăng nhập không có quyền nhập ghi chú vào sách này.");
+      const [{data:latestNotes,error:notesError},{data:latestBookmarks,error:marksError}]=await Promise.all([
+        client.from("reader_notes").select("*").eq("book_id",bookId).eq("owner_id",user.id),
+        client.from("reader_bookmarks").select("*").eq("book_id",bookId).eq("owner_id",user.id)
+      ]);
+      if(notesError||marksError)throw new Error("Không tải được ghi chú cloud mới nhất.");
+      const plan=planOfflineImport({
+        bookId,ownerId:user.id,local,
+        cloudNotes:(latestNotes||[]) as ReaderNote[],
+        cloudBookmarks:(latestBookmarks||[]) as ReaderBookmark[],
+        cloudDocument:documentData
+      });
+      const count=plan.notes.length+plan.bookmarks.length;
+      if(!count){
+        setOfflineMergeStatus("Không có ghi chú/trang đánh dấu mới cần thêm. "+
+          plan.conflicts+" ghi chú có khác biệt với cloud được giữ nguyên trên cloud; "+
+          plan.missingAnchors+" ghi chú thiếu neo hợp lệ đã bỏ qua.");
+        return;
+      }
+      if(!window.confirm("Nhập "+plan.notes.length+" ghi chú và "+plan.bookmarks.length+
+        " trang đã đánh dấu từ bản offline lên cloud? Không xóa hay ghi đè dữ liệu cloud. "+
+        plan.conflicts+" ghi chú trùng ID nhưng đã sửa sẽ được giữ nguyên trên cloud; "+
+        plan.missingAnchors+" ghi chú thiếu neo không được nhập."))return;
+      if(plan.notes.length){
+        const {error:insertError}=await client.from("reader_notes")
+          .upsert(plan.notes,{onConflict:"id",ignoreDuplicates:true});
+        if(insertError)throw new Error("Lưu ghi chú thất bại: "+insertError.message);
+        changed=true;
+      }
+      if(plan.bookmarks.length){
+        const {error:markError}=await client.from("reader_bookmarks")
+          .upsert(plan.bookmarks,{onConflict:"book_id,block_id",ignoreDuplicates:true});
+        if(markError)throw new Error("Lưu bookmark thất bại: "+markError.message);
+        changed=true;
+      }
+      const [{data:updatedNotes,error:refreshNotesError},{data:updatedMarks,error:refreshMarksError}]=await Promise.all([
+        client.from("reader_notes").select("*").eq("book_id",bookId).eq("owner_id",user.id)
+          .order("created_at",{ascending:false}),
+        client.from("reader_bookmarks").select("*").eq("book_id",bookId).eq("owner_id",user.id)
+          .order("page")
+      ]);
+      if(refreshNotesError||refreshMarksError)
+        throw new Error("Đã gửi dữ liệu nhưng chưa tải lại được. Hãy tải lại trang để kiểm tra.");
+      setNotes((updatedNotes||[]) as ReaderNote[]);
+      setBookmarks((updatedMarks||[]) as ReaderBookmark[]);
+      setOfflineMergeStatus("Đã thực hiện nhập ghi chú/trang đã đánh dấu. "+
+        plan.conflicts+" ghi chú có khác biệt được giữ nguyên trên cloud; "+
+        plan.missingAnchors+" ghi chú thiếu neo đã bỏ qua. Bản offline không bị thay đổi.");
+    }catch(err){
+      setOfflineMergeStatus((err instanceof Error?err.message:"Không thể nhập dữ liệu offline.")+
+        (changed?" Một phần có thể đã được lưu. Tải lại trang trước khi thử lại.":""));
+    }finally{setOfflineMergeBusy(false);}
   }
 
   function renderText(block:BookBlock) {
@@ -453,7 +521,7 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
       <button className="icon-button" title="Mục lục" onClick={()=>setLeftOpen(!leftOpen)}><Menu size={19}/></button><div className="reader-book-identity"><strong>{book.title}</strong><span>{book.author||"Thư viện của tôi"}</span></div><button className="icon-button" title="Sổ tay ghi chú" onClick={()=>router.push("/knowledge")}><NotebookPen size={18}/></button></div>
       <div className="reader-top-mid"><div className="reader-view-switch"><button className={view==="reflow"?"selected":""} onClick={()=>setView("reflow")} disabled={!documentData?.wordCount}><BookOpen size={15}/> Sách điện tử</button>{!isEpub&&<button className={view==="original"?"selected":""} onClick={()=>setView("original")}><FileText size={15}/> PDF gốc</button>}{isEpub&&<a className="reader-source-download" href={pdfUrl} download={book.title+".epub"} title="Tải EPUB gốc"><Download size={15}/> EPUB gốc</a>}</div></div>
       <div className="reader-top-right">
-        <button className="icon-button" title="Lưu bản offline (gồm PDF/EPUB, ghi chú và tiến độ)" disabled={offlineBusy||ocrBusy} onClick={()=>void saveOfflineSnapshot()}><HardDriveDownload size={19}/></button>
+        <button className="icon-button" title="Lưu bản offline (gồm PDF/EPUB, ghi chú và tiến độ)" disabled={offlineBusy||offlineMergeBusy||ocrBusy} onClick={()=>void saveOfflineSnapshot()}><HardDriveDownload size={19}/></button>
         {needsOcr&&<button className="icon-button" title="Nhận dạng OCR những trang PDF thiếu chữ" disabled={ocrBusy} onClick={()=>void recognizeCloudPages()}><ScanText size={19}/></button>}
         <button className="icon-button" title="Tìm trong sách (/)" disabled={!documentData?.wordCount} onClick={()=>{setSearchOpen(true);setFocusMode(false)}}><Search size={19}/></button>
         <button className="icon-button" title="Chế độ tập trung (F)" onClick={()=>setFocusMode(!focusMode)}><Focus size={19}/></button>
@@ -472,6 +540,10 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
         <button className="icon-button sidebar-toggle" title="Bảng ghi chú" onClick={()=>setRightOpen(!rightOpen)}>{rightOpen?<PanelRightClose size={20}/>:<PanelRightOpen size={20}/>}</button>
       </div>
     </header>
+    {offlineMergeStatus&&<div role="status" className="ocr-status offline-copy-status">
+      <UploadCloud size={16}/><span>{offlineMergeStatus}</span>
+      <button className="icon-button small" title="Đóng thông báo nhập ghi chú" onClick={()=>setOfflineMergeStatus("")}><X size={15}/></button>
+    </div>}
     {offlineMessage&&<div role="status" className="ocr-status offline-copy-status">
       <HardDriveDownload size={16}/><span>{offlineMessage}</span>
       {offlineSaved&&<a href={"/demo?book="+encodeURIComponent(offlineBookId(book.id))}>Mở bản offline</a>}
@@ -498,10 +570,18 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
         <div className="pdf-quality-tip offline-copy-tip">
           <strong>Đọc không cần mạng</strong>
           <p>Lưu sách, ghi chú và tiến độ xuống trình duyệt này để mở trong thư viện local mà không tải lại file từ cloud.</p>
-          <button type="button" className="outline-button" disabled={offlineBusy||ocrBusy} onClick={()=>void saveOfflineSnapshot()}>
+          <button type="button" className="outline-button" disabled={offlineBusy||offlineMergeBusy||ocrBusy} onClick={()=>void saveOfflineSnapshot()}>
             <HardDriveDownload size={15}/>{offlineBusy?"Đang lưu…":"Lưu bản offline"}
           </button>
           <small>Bản offline và cloud độc lập. Không tự đồng bộ ghi chú hai chiều.</small>
+        </div>
+        <div className="pdf-quality-tip offline-copy-tip">
+          <strong>Đưa ghi chú offline trở lại cloud</strong>
+          <p>Chỉ thêm ghi chú và trang đã đánh dấu mới. Các ghi chú cloud hiện có không bị ghi đè hoặc xóa.</p>
+          <button type="button" className="outline-button" disabled={offlineMergeBusy||offlineBusy||ocrBusy||!documentData} onClick={()=>void importOfflineAnnotations()}>
+            <UploadCloud size={15}/>{offlineMergeBusy?"Đang đối chiếu…":"Nhập ghi chú offline"}
+          </button>
+          <small>Cần bản offline của chính cuốn sách này trong /demo. Những ghi chú bị xung đột sẽ được giữ nguyên trên cloud.</small>
         </div>
         <div className="reading-stat"><span>TIẾN ĐỘ ĐỌC</span><div className="stat-percent"><strong>{percent}%</strong><small>{page}/{totalPages||"?"} trang</small></div><div className="progress-track"><span style={{width:`${percent}%`}}/></div></div>
       </aside>}
