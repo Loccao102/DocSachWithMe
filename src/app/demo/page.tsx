@@ -39,6 +39,7 @@ function DemoApp(){
   const [uploadLabel,setUploadLabel]=useState("");
   const [ocrBusy,setOcrBusy]=useState(false);
   const [ocrLabel,setOcrLabel]=useState("");
+  const [ocrLastPage,setOcrLastPage]=useState(0);
   const [message,setMessage]=useState("");
   const [page,setPage]=useState(1);
   const [jumpInput,setJumpInput]=useState("1");
@@ -141,6 +142,7 @@ function DemoApp(){
   }
   function openBook(book:DemoBook){
     tts.stop();
+    setOcrLastPage(0);
     setCurrent(book);activeRef.current=book;setPage(book.page||1);setRightOpen(false);setSearch("");setSearchOpen(false);setFocus(false);setLeftOpen(window.innerWidth>=800);
     setView(book.format==="epub"?"reflow":book.document?.wordCount?"reflow":"original");
   }
@@ -180,7 +182,8 @@ function DemoApp(){
     if(!window.confirm("OCR xử lý tối đa 8 trang thiếu chữ mỗi lượt. Trình duyệt có thể tải bộ dữ liệu ngôn ngữ, nhưng không tải nội dung PDF lên dịch vụ OCR. Tiếp tục?"))return;
     setOcrBusy(true);setOcrLabel("Đang khởi tạo OCR…");setMessage("");
     try{
-      const result=await ocrLocalPdf(current.pdf,current.document,(done,total,label)=>setOcrLabel(label+" ("+done+"/"+total+")"));
+      const result=await ocrLocalPdf(current.pdf,current.document,(done,total,label)=>setOcrLabel(label+" ("+done+"/"+total+")"),ocrLastPage);
+      setOcrLastPage(result.lastAttemptedPage);
       const updated={...current,document:result.document};
       await saveDemoBook(updated);
       setCurrent(updated);
