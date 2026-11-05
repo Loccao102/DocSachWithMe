@@ -259,3 +259,13 @@ Khi đã đăng nhập, mở một cuốn PDF từ thư viện cloud. Nếu sác
 - Khi lưu, hệ thống đọc lại bản JSON mới nhất để giữ mục lục và các trang đã OCR từ thiết bị khác; những đoạn đã có neo ghi chú OCR không bị ghi đè. **Không phải collaborative editing với khóa phiên bản tuyệt đối**: tránh xử lý cùng một cuốn ở hai thiết bị cùng lúc.
 - Nếu OCR không đọc được chữ, thử scan có độ phân giải tốt hơn; PDF có bảng, chữ viết tay hoặc scan mờ vẫn có thể cho kết quả sai. Bản gốc luôn dùng được để đối chiếu.
 - OCR chưa hỗ trợ EPUB vì EPUB có sẵn nội dung văn bản. Tệp sách 50 MB cần được tải xuống trình duyệt để xử lý OCR, nên kết nối và bộ nhớ thiết bị có thể ảnh hưởng tốc độ.
+
+## Sổ tay tri thức — lọc theo sách và xuất Excel
+
+Tại `/knowledge`, bạn có thể tìm bằng nhiều từ tiếng Việt, không phân biệt dấu hay chữ hoa/thường (ví dụ `dao duc`, `tu duy sach`). Các từ khóa cách nhau được tìm cùng lúc; đặt trong dấu ngoặc kép để giữ nguyên một cụm chính xác. Sổ tay có bộ lọc theo nguồn và từng cuốn sách (không trộn các bản sách local/cloud trùng tên).
+
+Hai định dạng xuất dữ liệu:
+- **Markdown:** văn bản ghi chú theo từng cuốn sách như trước.
+- **CSV:** chứa nguồn, sách, tác giả, trang, trích dẫn, ghi chú, ngày lưu, đường dẫn gốc để nhập vào Excel/Google Sheets. File có BOM UTF-8 để hạn chế lỗi tiếng Việt. Giá trị bắt đầu bằng cú pháp bảng tính nguy hiểm sẽ được chuyển thành text để tránh thực thi công thức khi mở file.
+
+Việc xuất chỉ lấy các ghi chú đang khớp bộ lọc, thực hiện trên trình duyệt; không tải dữ liệu lên bên thứ ba.
