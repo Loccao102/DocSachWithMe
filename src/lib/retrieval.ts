@@ -33,8 +33,9 @@ export function retrieveEvidence(document: BookDocument, query: string, page?: n
     summarizeHere ? blocks.filter(block => block.page === nearestPage) : blocks;
   const queryTerms = [...new Set(termsOf(query))].slice(0, 80);
   const ranked = candidates.map((block, index) => {
-    const blockWords = new Set(words(block.text));
-    const matches = queryTerms.reduce((count, term) => count + Number(blockWords.has(term)), 0);
+    // Stopword-only queries need location-based evidence; avoid tokenizing every paragraph.
+    const blockWords = queryTerms.length ? new Set(words(block.text)) : null;
+    const matches = blockWords ? queryTerms.reduce((count, term) => count + Number(blockWords.has(term)), 0) : 0;
     const distance = anchor === undefined ? 0 : Math.abs(block.page - anchor);
     let score = matches * 5 + (matches ? matches / Math.max(1, queryTerms.length) : 0);
     if (summarizeHere) {
@@ -51,23 +52,33 @@ export function retrieveEvidence(document: BookDocument, query: string, page?: n
     : ranked.filter(item => item.matches > 0 || (
       mode === "explain" && anchor !== undefined && item.distance <= 1
     ));
-  const fallback = anchor === undefined ? ranked.slice(0, 10) :
+  // Only inspect fallback candidates if the query has no relevant matches.
+  const pool = relevant.length ? relevant : anchor === undefined ? ranked.slice(0, 10) :
     ranked.filter(item => item.distance <= Math.max(1, Math.abs(nearestPage - anchor))).slice(0, 10);
-  const pool = relevant.length ? relevant : fallback;
 
-  pool.sort((a, b) => b.score - a.score || a.distance - b.distance || a.index - b.index);
-  const selected: typeof pool = [];
-  const pageCounts = new Map<number, number>();
   const limit = summarizeHere ? 18 : 12;
   const perPage = summarizeHere ? 3 : 4;
+  type Candidate = (typeof ranked)[number];
+  const compare = (a: Candidate, b: Candidate) =>
+    b.score - a.score || a.distance - b.distance || a.index - b.index;
+
+  // Keep only the best per-page candidates, preserving exactly the same
+  // final ordering and page cap without sorting every matching OCR paragraph.
+  const byPage = new Map<number, Candidate[]>();
   for (const item of pool) {
-    if (selected.length >= limit) break;
-    const count = pageCounts.get(item.block.page) ?? 0;
-    if (count >= perPage) continue;
-    selected.push(item);
-    pageCounts.set(item.block.page, count + 1);
+    let best = byPage.get(item.block.page);
+    if (!best) {
+      best = [];
+      byPage.set(item.block.page, best);
+    }
+    if (best.length === perPage && compare(item, best[best.length - 1]) >= 0) continue;
+    const position = best.findIndex(other => compare(item, other) < 0);
+    if (position === -1) best.push(item);
+    else best.splice(position, 0, item);
+    if (best.length > perPage) best.pop();
   }
-  selected.sort((a, b) => a.index - b.index);
+  const selected = [...byPage.values()].flat().sort(compare).slice(0, limit)
+    .sort((a, b) => a.index - b.index);
   return selected.map(item =>
     "[Trang " + item.block.page + ", mã " + item.block.id + "] " +
     item.block.text.replace(/\s+/g, " ").trim().slice(0, 1000)
