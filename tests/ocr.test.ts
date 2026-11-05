@@ -25,7 +25,7 @@ test("OCR adds usable text and preserves chapter anchors", () => {
   assert.equal(updated.pages[0].blocks[0].id, "p1-ocr0");
   assert.deepEqual(updated.toc, doc.toc);
   assert.equal(updated.analysis?.scannedPages.join(","), "3");
-  assert.equal(ocrCandidatePages(updated).length, 2); // Short OCR remains retryable.
+  assert.equal(ocrCandidatePages(updated).length, 1); // Only the remaining blank page.
   assert.equal(doc.pages[0].blocks.length, 0);
 });
 
