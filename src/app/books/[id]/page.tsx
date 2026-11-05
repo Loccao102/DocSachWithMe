@@ -395,7 +395,7 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
   }
 
   async function saveOfflineSnapshot(){
-    if(!book||offlineBusy||ocrBusy)return;
+    if(!book||offlineBusy||offlineMergeBusy||ocrBusy)return;
     setOfflineMessage("");
     setOfflineSaved(false);
     setOfflineBusy(true);
@@ -521,7 +521,7 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
       <button className="icon-button" title="Mục lục" onClick={()=>setLeftOpen(!leftOpen)}><Menu size={19}/></button><div className="reader-book-identity"><strong>{book.title}</strong><span>{book.author||"Thư viện của tôi"}</span></div><button className="icon-button" title="Sổ tay ghi chú" onClick={()=>router.push("/knowledge")}><NotebookPen size={18}/></button></div>
       <div className="reader-top-mid"><div className="reader-view-switch"><button className={view==="reflow"?"selected":""} onClick={()=>setView("reflow")} disabled={!documentData?.wordCount}><BookOpen size={15}/> Sách điện tử</button>{!isEpub&&<button className={view==="original"?"selected":""} onClick={()=>setView("original")}><FileText size={15}/> PDF gốc</button>}{isEpub&&<a className="reader-source-download" href={pdfUrl} download={book.title+".epub"} title="Tải EPUB gốc"><Download size={15}/> EPUB gốc</a>}</div></div>
       <div className="reader-top-right">
-        <button className="icon-button" title="Lưu bản offline (gồm PDF/EPUB, ghi chú và tiến độ)" disabled={offlineBusy||ocrBusy} onClick={()=>void saveOfflineSnapshot()}><HardDriveDownload size={19}/></button>
+        <button className="icon-button" title="Lưu bản offline (gồm PDF/EPUB, ghi chú và tiến độ)" disabled={offlineBusy||offlineMergeBusy||ocrBusy} onClick={()=>void saveOfflineSnapshot()}><HardDriveDownload size={19}/></button>
         {needsOcr&&<button className="icon-button" title="Nhận dạng OCR những trang PDF thiếu chữ" disabled={ocrBusy} onClick={()=>void recognizeCloudPages()}><ScanText size={19}/></button>}
         <button className="icon-button" title="Tìm trong sách (/)" disabled={!documentData?.wordCount} onClick={()=>{setSearchOpen(true);setFocusMode(false)}}><Search size={19}/></button>
         <button className="icon-button" title="Chế độ tập trung (F)" onClick={()=>setFocusMode(!focusMode)}><Focus size={19}/></button>
@@ -570,7 +570,7 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
         <div className="pdf-quality-tip offline-copy-tip">
           <strong>Đọc không cần mạng</strong>
           <p>Lưu sách, ghi chú và tiến độ xuống trình duyệt này để mở trong thư viện local mà không tải lại file từ cloud.</p>
-          <button type="button" className="outline-button" disabled={offlineBusy||ocrBusy} onClick={()=>void saveOfflineSnapshot()}>
+          <button type="button" className="outline-button" disabled={offlineBusy||offlineMergeBusy||ocrBusy} onClick={()=>void saveOfflineSnapshot()}>
             <HardDriveDownload size={15}/>{offlineBusy?"Đang lưu…":"Lưu bản offline"}
           </button>
           <small>Bản offline và cloud độc lập. Không tự đồng bộ ghi chú hai chiều.</small>
