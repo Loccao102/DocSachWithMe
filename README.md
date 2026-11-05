@@ -317,3 +317,10 @@ Luồng fallback chỉ chạy khi không có bằng chứng phù hợp; truy v�
 - Thanh tiến độ dùng số trang **đã hoàn thành** (không còn giả định trang được xử lý theo thứ tự). Nếu một trang lỗi, batch đang chạy có thể hoàn tất, nhưng không khởi chạy các batch tiếp theo.
 - Tạo mục lục EPUB ghi nhớ trang của neo chương ngay khi phát hiện; không duyệt lại toàn bộ khối văn bản từ đầu cho từng chương EPUB. Không thay đổi định dạng lưu sách hay ID của neo văn bản.
 - Có regression test cho giới hạn đồng thời, thứ tự, lỗi và kích thước đầu vào. Mức tăng tốc thực tế phụ thuộc PDF.js worker, CPU, cấu trúc file và thiết bị; chưa có benchmark browser đầy đủ.
+
+## Thư viện cá nhân dễ dùng hơn (/demo)
+
+- Thẻ **Đọc tiếp** đưa bạn trở lại cuốn sách vừa mở gần nhất, kể cả sau khi rời /demo; không cần cuộn tìm trong kệ sách. Đối với sách mới chưa từng mở, nút đưa đến cuốn mới được thêm gần nhất.
+- Thanh tìm sách theo **tên hoặc tác giả**, hỗ trợ tiếng Việt không dấu (kể cả chữ Đ), nhiều từ khóa, nút xóa tìm kiếm, gợi ý khi không có kết quả và phím tắt Ctrl/Cmd+K để focus ô tìm.
+- Sắp xếp theo mở gần đây, tên A–Z hoặc phần trăm đọc. Thời gian mở gần nhất được lưu ngay trong IndexedDB khi mở sách; dữ liệu sách cũ không bị migration và không mất ghi chú.
+- Một cuốn PDF scan chưa có số trang trong văn bản vẫn xuất hiện và mở được; thư viện không cố đoán tiến độ khi chưa biết tổng số trang. Không đồng bộ lịch sử mở sách giữa trình duyệt khác.
