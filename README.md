@@ -304,3 +304,9 @@ Khi đọc sách đã đăng nhập tại `/books/[id]`, mở thanh bên trái v
 - Dùng `upsert(..., ignoreDuplicates: true)` cho note ID và bookmark block ID nên thao tác lặp lại không tạo bản ghi trùng cùng khóa. Nếu lỗi giữa hai bước, một phần dữ liệu có thể đã lên cloud; tải lại trang để đối chiếu trước khi thử lại.
 - Bản offline được giữ nguyên. Đây là đồng bộ **một chiều, thủ công và chỉ thêm** ghi chú/bookmark; không phải đồng bộ hai chiều tự động, và không tự giải quyết nội dung xung đột.
 - Quyền lưu trên Supabase do RLS kiểm tra theo chủ sở hữu sách và tài khoản đăng nhập. Không có service role key trong frontend.
+
+## Tối ưu tra cứu AI trên sách dài
+
+Truy xuất bằng chứng giờ chỉ giữ tối đa 3–4 đoạn có điểm cao nhất **trên mỗi trang** trước khi xếp hạng cuối cùng. Điều này tránh sắp xếp toàn bộ hàng nghìn đoạn trùng khớp trong sách PDF dài/OCR, trong khi vẫn duy trì giới hạn 12–18 trích đoạn, điểm ưu tiên, khoảng cách trang và thứ tự gốc.
+
+Luồng fallback chỉ chạy khi không có bằng chứng phù hợp; truy vấn toàn stopword không cần tách từ toàn bộ văn bản. Không thêm embedding/API call, không thay đổi định dạng câu trả lời hoặc quyền sách cloud. Độ trễ thực tế vẫn phụ thuộc tải file JSON từ Storage và thời gian phản hồi mô hình AI.
