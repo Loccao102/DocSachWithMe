@@ -684,3 +684,9 @@ h1,h2,h3,p{margin-top:0}
   cursor: pointer;
 }
 .pdf-quality-tip small { display: block; line-height: 1.5; opacity: .8; }
+
+.knowledge-cloud-status {
+  padding: 12px 15px; margin: 12px 0; border: 1px solid #c4d9c9;
+  border-radius: 12px; background: #f1f7ef; color: #2b5936;
+  font-size: 13px; line-height: 1.6;
+}
