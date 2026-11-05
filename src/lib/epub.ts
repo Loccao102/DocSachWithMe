@@ -116,6 +116,7 @@ export async function extractEpub(file:File|Blob,onProgress?:(index:number,total
     const before=pages[pages.length-1].blocks.length;
     let chapterTitle="";
     let startBlockId="";
+    let startPage=page;
     const candidates=Array.from(body.querySelectorAll("h1,h2,h3,h4,p,li,blockquote,pre"));
     const paragraphs=candidates.length?candidates:[body];
     for(const element of paragraphs){
@@ -127,12 +128,16 @@ export async function extractEpub(file:File|Blob,onProgress?:(index:number,total
       if(!chapterTitle&&heading)chapterTitle=content.slice(0,110);
       const prior=pages[pages.length-1].blocks.length;
       add(content,heading?"heading":"paragraph",index>0 && !startBlockId);
-      if(!startBlockId && (pages[pages.length-1].blocks.length>prior||page>1))startBlockId=pages[pages.length-1].blocks.at(-1)?.id||"";
+      if(!startBlockId && (pages[pages.length-1].blocks.length>prior||page>1)){
+        startBlockId=pages[pages.length-1].blocks.at(-1)?.id||"";
+        startPage=page;
+      }
     }
     // Bookmark each spine section, preserving its original reading order.
     if(startBlockId && toc.length<150){
-      const match=pages.flatMap(p=>p.blocks).find(block=>block.id===startBlockId);
-      toc.push({title:chapterTitle||`Phần ${index+1}`,page:match?.page||1,blockId:startBlockId});
+      // startPage is captured with the first chapter anchor. Avoid rescanning
+      // all previously parsed pages once for every EPUB spine section.
+      toc.push({title:chapterTitle||`Phần ${index+1}`,page:startPage,blockId:startBlockId});
     }
     if(!before&&pages[pages.length-1].blocks.length===0)continue;
     onProgress?.(index+1,items.length);
