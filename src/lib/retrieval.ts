@@ -25,7 +25,12 @@ export function retrieveEvidence(document: BookDocument, query: string, page?: n
     : blocks;
   // Some imported documents have sparse page numbers. Fall back to the nearest
   // available page rather than accidentally summarizing the entire book.
-  const candidates = window.length ? window : blocks;
+  const nearestPage = anchor === undefined ? blocks[0].page :
+    blocks.reduce((best, block) =>
+      Math.abs(block.page - anchor) < Math.abs(best - anchor) ? block.page : best,
+    blocks[0].page);
+  const candidates = window.length ? window :
+    summarizeHere ? blocks.filter(block => block.page === nearestPage) : blocks;
   const queryTerms = [...new Set(termsOf(query))].slice(0, 80);
   const ranked = candidates.map((block, index) => {
     const blockWords = new Set(words(block.text));
@@ -46,10 +51,9 @@ export function retrieveEvidence(document: BookDocument, query: string, page?: n
     : ranked.filter(item => item.matches > 0 || (
       mode === "explain" && anchor !== undefined && item.distance <= 1
     ));
-  const pool = relevant.length ? relevant : ranked
-    .slice()
-    .sort((a, b) => a.distance - b.distance || a.index - b.index)
-    .slice(0, 10);
+  const fallback = anchor === undefined ? ranked.slice(0, 10) :
+    ranked.filter(item => item.distance <= Math.max(1, Math.abs(nearestPage - anchor))).slice(0, 10);
+  const pool = relevant.length ? relevant : fallback;
 
   pool.sort((a, b) => b.score - a.score || a.distance - b.distance || a.index - b.index);
   const selected: typeof pool = [];
