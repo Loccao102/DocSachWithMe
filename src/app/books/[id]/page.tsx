@@ -5,7 +5,7 @@ import type { User } from "@supabase/supabase-js";
 import {
   ArrowLeft, ArrowRight, BookHeart, BookMarked, BookOpen, Bookmark, NotebookPen,
   Check, ChevronDown, ChevronLeft, ChevronRight, FileText, Highlighter,
-  List, LoaderCircle, Menu, MessageCircle, Minus, Moon, Search, Focus, Download, Copy, Volume2, Pause, Play, Square, PanelRightClose,
+  List, LoaderCircle, Menu, MessageCircle, Minus, Moon, Search, Focus, Download, HardDriveDownload, Copy, Volume2, Pause, Play, Square, PanelRightClose,
   PanelRightOpen, Plus, ScanText, Send, Settings2, Sparkles, StickyNote, Sun, Trash2, X
 } from "lucide-react";
 import { AuthGate } from "@/components/AuthGate";
@@ -14,6 +14,8 @@ import type { Book, BookBlock, BookDocument, ReaderBookmark, ReaderNote, Reading
 import { downloadNotesMarkdown } from "@/lib/export";
 import { mergeOcrDocuments, ocrCandidatePages, ocrLocalPdf } from "@/lib/ocr";
 import { useReadAloud } from "@/hooks/useReadAloud";
+import { createOfflineBook, offlineBookId } from "@/lib/offline-book";
+import { getDemoBook, saveDemoBook } from "@/lib/demo-store";
 
 type Panel = "notes" | "ai";
 type Theme = "cream" | "white" | "dark";
@@ -78,6 +80,9 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
   const [ocrStatus,setOcrStatus]=useState("");
   const [ocrLastPage,setOcrLastPage]=useState(0);
   const [ocrError,setOcrError]=useState("");
+  const [offlineBusy,setOfflineBusy]=useState(false);
+  const [offlineMessage,setOfflineMessage]=useState("");
+  const [offlineSaved,setOfflineSaved]=useState(false);
   useEffect(()=>setOcrLastPage(0),[bookId]);
   const tts=useReadAloud();
   const scrollRef=useRef<HTMLDivElement>(null);
@@ -386,6 +391,36 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
     finally{setOcrBusy(false);}
   }
 
+  async function saveOfflineSnapshot(){
+    if(!book||offlineBusy||ocrBusy)return;
+    setOfflineMessage("");
+    setOfflineSaved(false);
+    setOfflineBusy(true);
+    try{
+      const client=requireSupabase();
+      const {data:{user:identity},error:authError}=await client.auth.getUser();
+      if(authError||identity?.id!==user.id||book.owner_id!==user.id)
+        throw new Error("Phiên đăng nhập không có quyền với cuốn sách này.");
+      const copyId=offlineBookId(book.id);
+      const oldCopy=await getDemoBook(copyId);
+      if(oldCopy){
+        if(!window.confirm("Đã có bản offline của sách này. Thao tác cập nhật sẽ GHI ĐÈ các ghi chú, highlight và tiến độ đã sửa ở bản offline. Hãy sao lưu ZIP trong /demo nếu cần giữ chúng. Bạn vẫn muốn thay thế?"))return;
+      }else if(!window.confirm("Lưu PDF/EPUB và ghi chú từ cloud xuống bộ nhớ trình duyệt này để đọc offline? Đây là bản sao riêng, các thay đổi offline không tự đồng bộ lại cloud."))return;
+      const {data:source,error:downloadError}=await client.storage.from("books").download(book.file_path);
+      if(downloadError||!source)throw new Error("Không tải được sách gốc từ Supabase Storage.");
+      const copy=createOfflineBook({
+        book,ownerId:user.id,original:source,document:documentData,
+        notes,bookmarks,progress:{page},createdAt:oldCopy?.createdAt
+      });
+      await saveDemoBook(copy);
+      setOfflineSaved(true);
+      setOfflineMessage("Đã lưu bản offline cùng "+copy.notes.length+" ghi chú và "+
+        copy.bookmarks.length+" trang đánh dấu. Bạn có thể mở trong /demo.");
+    }catch(err){
+      setOfflineMessage(err instanceof Error?err.message:"Không lưu được sách offline. Kiểm tra dung lượng trình duyệt.");
+    }finally{setOfflineBusy(false);}
+  }
+
   function renderText(block:BookBlock) {
     const relevant=notes.filter(n=>n.block_id===block.id && n.quote).map(n=>({...n,index:block.text.indexOf(n.quote)})).filter(n=>n.index>=0).sort((a,b)=>a.index-b.index);
     const nodes:React.ReactNode[]=[];
@@ -418,6 +453,7 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
       <button className="icon-button" title="Mục lục" onClick={()=>setLeftOpen(!leftOpen)}><Menu size={19}/></button><div className="reader-book-identity"><strong>{book.title}</strong><span>{book.author||"Thư viện của tôi"}</span></div><button className="icon-button" title="Sổ tay ghi chú" onClick={()=>router.push("/knowledge")}><NotebookPen size={18}/></button></div>
       <div className="reader-top-mid"><div className="reader-view-switch"><button className={view==="reflow"?"selected":""} onClick={()=>setView("reflow")} disabled={!documentData?.wordCount}><BookOpen size={15}/> Sách điện tử</button>{!isEpub&&<button className={view==="original"?"selected":""} onClick={()=>setView("original")}><FileText size={15}/> PDF gốc</button>}{isEpub&&<a className="reader-source-download" href={pdfUrl} download={book.title+".epub"} title="Tải EPUB gốc"><Download size={15}/> EPUB gốc</a>}</div></div>
       <div className="reader-top-right">
+        <button className="icon-button" title="Lưu bản offline (gồm PDF/EPUB, ghi chú và tiến độ)" disabled={offlineBusy||ocrBusy} onClick={()=>void saveOfflineSnapshot()}><HardDriveDownload size={19}/></button>
         {needsOcr&&<button className="icon-button" title="Nhận dạng OCR những trang PDF thiếu chữ" disabled={ocrBusy} onClick={()=>void recognizeCloudPages()}><ScanText size={19}/></button>}
         <button className="icon-button" title="Tìm trong sách (/)" disabled={!documentData?.wordCount} onClick={()=>{setSearchOpen(true);setFocusMode(false)}}><Search size={19}/></button>
         <button className="icon-button" title="Chế độ tập trung (F)" onClick={()=>setFocusMode(!focusMode)}><Focus size={19}/></button>
@@ -436,6 +472,11 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
         <button className="icon-button sidebar-toggle" title="Bảng ghi chú" onClick={()=>setRightOpen(!rightOpen)}>{rightOpen?<PanelRightClose size={20}/>:<PanelRightOpen size={20}/>}</button>
       </div>
     </header>
+    {offlineMessage&&<div role="status" className="ocr-status offline-copy-status">
+      <HardDriveDownload size={16}/><span>{offlineMessage}</span>
+      {offlineSaved&&<a href={"/demo?book="+encodeURIComponent(offlineBookId(book.id))}>Mở bản offline</a>}
+      <button className="icon-button small" title="Đóng thông báo" onClick={()=>{setOfflineMessage("");setOfflineSaved(false);}}><X size={15}/></button>
+    </div>}
     {(ocrStatus||ocrError)&&<div role={ocrError?"alert":"status"} className="ocr-status">
       <ScanText size={16}/><span>{ocrError||ocrStatus}</span>
       {ocrBusy&&<LoaderCircle className="spin" size={16}/>}
@@ -454,6 +495,14 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
           <button type="button" className="outline-button" disabled={ocrBusy} onClick={()=>void recognizeCloudPages()}><ScanText size={15}/>{ocrBusy?"Đang OCR…":"Nhận dạng văn bản OCR"}</button>
           <small>8 trang/lượt, cần tải bộ ngôn ngữ lần đầu. PDF gốc vẫn được giữ nguyên.</small>
         </div>}
+        <div className="pdf-quality-tip offline-copy-tip">
+          <strong>Đọc không cần mạng</strong>
+          <p>Lưu sách, ghi chú và tiến độ xuống trình duyệt này để mở trong thư viện local mà không tải lại file từ cloud.</p>
+          <button type="button" className="outline-button" disabled={offlineBusy||ocrBusy} onClick={()=>void saveOfflineSnapshot()}>
+            <HardDriveDownload size={15}/>{offlineBusy?"Đang lưu…":"Lưu bản offline"}
+          </button>
+          <small>Bản offline và cloud độc lập. Không tự đồng bộ ghi chú hai chiều.</small>
+        </div>
         <div className="reading-stat"><span>TIẾN ĐỘ ĐỌC</span><div className="stat-percent"><strong>{percent}%</strong><small>{page}/{totalPages||"?"} trang</small></div><div className="progress-track"><span style={{width:`${percent}%`}}/></div></div>
       </aside>}
       <main className="reader-content" ref={scrollRef}>

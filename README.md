@@ -274,3 +274,13 @@ Việc xuất chỉ lấy các ghi chú đang khớp bộ lọc, thực hiện t
 ## OCR nhiều lượt cho sách scan dài
 
 Đối với PDF có trên 8 trang cần OCR, mỗi lần bấm **Nhận dạng OCR** xử lý tối đa 8 trang, rồi lưu vị trí trang cuối đã thử. Lần tiếp theo ưu tiên nhóm trang **sau** vị trí đó, kể cả khi nhóm trước có trang trắng hoặc scan quá mờ nên nhận dạng không thành công. Khi đến cuối sách, hệ thống quay vòng tới các trang còn thiếu. Chuyển sang cuốn khác sẽ đặt lại vị trí OCR. Điều này giúp hoàn thành từng phần của sách dài mà không bị mắc kẹt ở trang đầu; không phải xử lý tự động liên tục trong nền.
+
+## Sao chép sách từ cloud về thư viện trên thiết bị
+
+Trong Reader đã đăng nhập (`/books/[id]`), chọn biểu tượng tải về thiết bị hoặc nút **Lưu bản offline** ở thanh bên trái. Ứng dụng tải PDF/EPUB gốc từ bucket `books` private theo phiên đăng nhập, cùng nội dung ebook/OCR, ghi chú, highlight, trang đánh dấu và trang đang đọc, rồi lưu một bản độc lập vào IndexedDB trong `/demo`. Không cần schema Supabase mới.
+
+- Một cuốn cloud có ID ổn định `cloud-<book-id>` ở thư viện thiết bị. Nếu đã có bản sao, hệ thống **yêu cầu xác nhận trước khi ghi đè**, vì thay đổi local sẽ bị thay thế. Có thể sao lưu ZIP từ `/demo` trước.
+- Chỉ nhận sách thuộc tài khoản hiện tại; ghi chú và bookmark lạc sang tài khoản khác không được sao chép. Note đã được OCR giữ nguyên neo trang/chữ.
+- PDF chưa có văn bản vẫn lưu được và mở ở chế độ PDF gốc. EPUB phải có bản văn đã trích xuất để sử dụng ebook mode.
+- Bản cloud và bản trên thiết bị **không đồng bộ tự động hai chiều**. Xóa bản offline không xóa sách cloud và ngược lại. Xóa dữ liệu trình duyệt sẽ mất bản sao nếu chưa có file ZIP.
+- Dữ liệu tài liệu lưu trong IndexedDB, vì vậy không phải tải lại sách từ cloud sau khi mở `/demo`. **Hạn chế:** nếu ứng dụng chưa được cache hoặc cài như PWA, khi mất Internet hoàn toàn trang web `/demo` có thể không tải được. Hãy mở `/demo` khi còn Internet trước; đây là bản snapshot local, chưa cam kết chế độ web ngoại tuyến hoàn chỉnh.
