@@ -718,3 +718,34 @@ h1,h2,h3,p{margin-top:0}
 .offline-copy-tip p{font-size:11px;line-height:1.7;margin:0}
 .offline-copy-tip button[disabled]{opacity:.55;cursor:not-allowed}
 @media(max-width:700px){.offline-copy-status{flex-wrap:wrap}.offline-copy-status>a{order:2}}
+
+
+/* Personal local library: resume, search and sorting */
+.demo-continue{display:flex;justify-content:space-between;align-items:center;gap:22px;
+  margin:26px 0 30px;padding:23px 25px;border-radius:18px;
+  background:linear-gradient(120deg,#e9eee3,#faf7e9);border:1px solid #d7e4d5}
+.demo-continue>div{min-width:0;flex:1}
+.demo-continue .eyebrow{font-size:10px;letter-spacing:.13em;color:#64836a}
+.demo-continue h2{font-size:clamp(20px,2.5vw,26px);line-height:1.25;color:#2e5540;margin:7px 0}
+.demo-continue p{margin:0 0 7px;font-size:14px;color:#526b59;white-space:normal;overflow-wrap:anywhere}
+.demo-continue p strong{color:#335341}
+.demo-continue small{font-size:12px;color:#758675}
+.demo-continue>.primary-button{display:inline-flex;gap:9px;align-items:center;justify-content:center;
+  white-space:nowrap;flex-shrink:0;min-height:44px}
+.demo-library-tools{display:flex;align-items:center;gap:13px;flex-wrap:wrap;margin:3px 0 24px}
+.demo-library-search{display:flex;align-items:center;gap:9px;flex:1;min-width:190px;max-width:530px;
+  padding:0 12px;background:white;border:1px solid #d7e3d6;border-radius:12px;color:#718977}
+.demo-library-search:focus-within{border-color:#6d9e7c;box-shadow:0 0 0 3px #a6d7b533}
+.demo-library-search input{padding:13px 0;background:transparent;outline:none;border:0;flex:1;
+  min-width:0;font-size:13px;color:#344d40}
+.demo-library-search>button{border:0;background:none;color:#6a8373;cursor:pointer;padding:5px}
+.demo-library-sort{display:flex;align-items:center;gap:8px;font-size:12px;color:#68806e;white-space:nowrap}
+.demo-library-sort select{border:1px solid #d7e3d6;border-radius:10px;background:white;
+  padding:11px;color:#375341;max-width:190px}
+.demo-library-count{font-size:12px;color:#7b8e80}
+@media(max-width:640px){
+  .demo-continue{flex-direction:column;align-items:stretch;padding:20px;gap:16px}
+  .demo-continue>.primary-button{width:100%}
+  .demo-library-search{flex-basis:100%;max-width:none}
+  .demo-library-sort{flex:1}
+}

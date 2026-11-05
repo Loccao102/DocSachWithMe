@@ -15,6 +15,7 @@ import TocEditor from "@/components/TocEditor";
 import { exportDemoBackup, importDemoBackup } from "@/lib/backup";
 import { deleteDemoBook, getDemoBook, listDemoBooks, saveDemoBook, type DemoBook, type DemoNote } from "@/lib/demo-store";
 import type { BookBlock } from "@/lib/types";
+import {orderLibraryBooks,readingPercent,selectContinueBook,type LibrarySort} from "@/lib/demo-library";
 
 type ReaderTheme="cream"|"white"|"dark";
 const colors=["#9c766e","#718578","#9c8d6d","#6c8292","#b57e61","#716f8a"];
@@ -34,6 +35,8 @@ function exportMarkdown(book:DemoBook){
 }
 function DemoApp(){
   const [books,setBooks]=useState<DemoBook[]>([]);
+  const [librarySearch,setLibrarySearch]=useState("");
+  const [librarySort,setLibrarySort]=useState<LibrarySort>("recent");
   const [current,setCurrent]=useState<DemoBook|null>(null);
   const [loading,setLoading]=useState(true);
   const [uploading,setUploading]=useState(false);
@@ -61,12 +64,15 @@ function DemoApp(){
   const [tocEditing,setTocEditing]=useState(false);
   const fileRef=useRef<HTMLInputElement>(null);
   const restoreRef=useRef<HTMLInputElement>(null);
+  const librarySearchRef=useRef<HTMLInputElement>(null);
   const [restoring,setRestoring]=useState(false);
   const [exportingId,setExportingId]=useState<string|null>(null);
   const readerRef=useRef<HTMLElement>(null);
   const linkedBlockRef=useRef<string|null>(null);
   const activeRef=useRef<DemoBook|null>(null);
   const pdfUrl=useMemo(()=>current?.pdf?URL.createObjectURL(current.pdf):"",[current?.id,current?.pdf]);
+  const visibleBooks=useMemo(()=>orderLibraryBooks(books,librarySearch,librarySort),[books,librarySearch,librarySort]);
+  const continueBook=useMemo(()=>selectContinueBook(books),[books]);
   useEffect(()=>{void prepareDemoOffline().then(setShellCached).catch(()=>{});},[]);
   useEffect(()=>()=>{if(pdfUrl)URL.revokeObjectURL(pdfUrl)},[pdfUrl]);
   useEffect(()=>{
@@ -102,6 +108,9 @@ function DemoApp(){
     const listener=(event:KeyboardEvent)=>{
       const target=event.target as HTMLElement;
       if(event.key==="Escape"){setSearchOpen(false);setFocus(false);setSelection(null);return;}
+      if(!current && (event.ctrlKey||event.metaKey) && event.key.toLowerCase()==="k"){
+        event.preventDefault();librarySearchRef.current?.focus();return;
+      }
       if(target.matches("input, textarea") || !current || event.ctrlKey || event.metaKey)return;
       if(event.key.toLowerCase()==="f"&&!event.altKey)setFocus(prev=>!prev);
       if(event.key==="/"){event.preventDefault();setSearchOpen(true);}
@@ -139,14 +148,17 @@ function DemoApp(){
     tts.stop();
     const max=current.document?.totalPages||Math.max(page,1);
     const target=Math.min(Math.max(1,value),max);
-    setPage(target);setJumpInput(String(target));setCurrent({...current,page:target});
+    setPage(target);setJumpInput(String(target));setCurrent({...current,page:target,lastOpenedAt:new Date().toISOString()});
     readerRef.current?.scrollTo({top:0,behavior:"smooth"});
     if(blockId)setTimeout(()=>document.getElementById("demo-"+blockId)?.scrollIntoView({behavior:"smooth",block:"center"}),80);
   }
   function openBook(book:DemoBook){
     tts.stop();
     setOcrLastPage(0);
-    setCurrent(book);activeRef.current=book;setPage(book.page||1);setRightOpen(false);setSearch("");setSearchOpen(false);setFocus(false);setLeftOpen(window.innerWidth>=800);
+    const opened={...book,lastOpenedAt:new Date().toISOString()};
+    setCurrent(opened);activeRef.current=opened;setPage(book.page||1);
+    setBooks(previous=>previous.map(item=>item.id===opened.id?opened:item));
+    void saveDemoBook(opened).catch(()=>setMessage("Không lưu được lần mở sách gần nhất."));setRightOpen(false);setSearch("");setSearchOpen(false);setFocus(false);setLeftOpen(window.innerWidth>=800);
     setView(book.format==="epub"?"reflow":book.document?.wordCount?"reflow":"original");
   }
   async function onFile(file:File|undefined){
@@ -275,14 +287,40 @@ function DemoApp(){
       <input type="file" accept=".zip,.dswm.zip,application/zip" hidden ref={restoreRef} onChange={e=>restoreBackup(e.target.files?.[0])}/>
       <input type="file" accept=".pdf,.epub,application/pdf,application/epub+zip" hidden ref={fileRef} onChange={e=>onFile(e.target.files?.[0])}/></div>
       {message&&<p className="error-banner">{message}</p>}
+      {continueBook&&<section className="demo-continue" aria-label="Tiếp tục đọc sách">
+        <div><span className="eyebrow">QUAY LẠI TRANG SÁCH</span>
+          <h2>{continueBook.lastOpenedAt?"Đọc tiếp cuốn đang dở":"Mở cuốn sách mới thêm"}</h2>
+          <p><strong>{continueBook.title}</strong>{continueBook.author?" · "+continueBook.author:""}</p>
+          <small>Trang {continueBook.page||1}{continueBook.document?.totalPages?"/"+continueBook.document.totalPages:""}
+            {readingPercent(continueBook)!==null?" · "+readingPercent(continueBook)+"%":""} · {continueBook.format==="epub"?"EPUB":"PDF"}</small>
+        </div>
+        <button type="button" className="primary-button" onClick={()=>openBook(continueBook)}>
+          <BookOpen size={17}/> {continueBook.lastOpenedAt?"Đọc tiếp":"Mở sách"} <ArrowRight size={16}/>
+        </button>
+      </section>}
       <div className="demo-library-title"><h2>Kệ sách trên thiết bị</h2><span>{books.length} cuốn</span></div>
-      {books.length?<div className="demo-books">{books.map((book,index)=><div className="demo-book" key={book.id}>
+      {books.length>0&&<div className="demo-library-tools">
+        <label className="demo-library-search"><Search size={18}/>
+          <input ref={librarySearchRef} type="search" value={librarySearch} onChange={e=>setLibrarySearch(e.target.value)}
+            placeholder="Tìm tên sách hoặc tác giả…" aria-label="Tìm trong thư viện trên thiết bị"/>
+          {librarySearch&&<button type="button" title="Xóa tìm kiếm" onClick={()=>setLibrarySearch("")}><X size={15}/></button>}
+        </label>
+        <label className="demo-library-sort">Sắp xếp
+          <select value={librarySort} onChange={e=>setLibrarySort(e.target.value as LibrarySort)}>
+            <option value="recent">Mở gần đây</option>
+            <option value="title">Tên sách A–Z</option>
+            <option value="progress">Tiến độ đọc</option>
+          </select>
+        </label>
+        <span className="demo-library-count">{visibleBooks.length}/{books.length} cuốn</span>
+      </div>}
+      {visibleBooks.length?<div className="demo-books">{visibleBooks.map((book,index)=><div className="demo-book" key={book.id}>
         <button className="demo-book-action" onClick={()=>openBook(book)}><div className="demo-book-cover" style={{background:colors[index%colors.length]}}><BookOpen size={30}/><span>{book.title}</span><small>{book.format==="epub"?"EPUB":"PDF"} · DOCSACHWITHME</small></div><strong>{book.title}</strong><small>{book.document?.totalPages||"PDF"} trang · đang ở trang {book.page||1}</small></button>
         <div className="demo-book-actions">
           <button title="Sao lưu cả PDF, tiến độ, highlight và ghi chú" disabled={exportingId===book.id} onClick={()=>saveBackup(book)}><Download size={16}/></button>
           <button title="Xóa sách khỏi thiết bị" onClick={()=>removeBook(book)}><Trash2 size={16}/></button>
         </div>
-      </div>)}</div>:<div className="demo-empty"><BookOpen size={32}/><h3>Kệ sách đang trống</h3><p>Hãy thêm một cuốn PDF để bắt đầu đọc.</p></div>}
+      </div>)}</div>:books.length?<div className="demo-empty"><Search size={32}/><h3>Không tìm thấy sách</h3><p>Thử tìm bằng tên sách, tác giả khác hoặc bỏ bộ lọc.</p><button type="button" className="outline-button" onClick={()=>setLibrarySearch("")}>Xóa tìm kiếm</button></div>:<div className="demo-empty"><BookOpen size={32}/><h3>Kệ sách đang trống</h3><p>Hãy thêm một cuốn PDF hoặc EPUB để bắt đầu đọc.</p></div>}
       <p className="demo-privacy"><Cloud size={15}/> Sách, ghi chú được giữ trong bộ nhớ trình duyệt và không tự đồng bộ cloud. Hãy xuất bản sao lưu ZIP định kỳ. {shellCached?"Giao diện đã đăng ký cache để mở lại khi ngoại tuyến; các bộ ngôn ngữ OCR chưa tải có thể vẫn cần Internet.":"Để mở web khi mất mạng, hãy truy cập /demo khi có kết nối trên trình duyệt hỗ trợ service worker."}</p>
     </main>
   </div>;
