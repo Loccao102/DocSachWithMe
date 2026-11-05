@@ -68,3 +68,38 @@ test("retrieval limits repeated snippets from a single page", () => {
 test("empty documents return no evidence", () => {
   assert.equal(retrieveEvidence(documentOf({ page: 1, texts: [] }), "test"), "");
 });
+
+test("large repeated query results preserve the four-excerpts-per-page cap", () => {
+  const pages=Array.from({length:160},(_,i)=>({
+    page:i+1,texts:Array.from({length:42},(_,j)=>"insight evidence block "+j)
+  }));
+  const text=retrieveEvidence(documentOf(...pages),"insight evidence");
+  assert.equal((text.match(/\[Trang /g)||[]).length,12);
+  for(let page=1;page<=3;page++){
+    assert.equal((text.match(new RegExp("\\[Trang "+page+",","g"))||[]).length,4);
+  }
+  assert.doesNotMatch(text,/\[Trang 4,/);
+});
+
+test("ranked excerpts from later pages take priority over weak earlier matches",()=>{
+  const doc=documentOf(
+    {page:1,texts:Array.from({length:25},(_,i)=>"compass just "+i)},
+    {page:2,texts:Array.from({length:25},(_,i)=>"compass navigation expedition "+i)},
+    {page:3,texts:Array.from({length:25},(_,i)=>"compass navigation expedition "+i)}
+  );
+  const text=retrieveEvidence(doc,"compass navigation expedition");
+  assert.equal((text.match(/\[Trang 1,/g)||[]).length,4);
+  assert.equal((text.match(/\[Trang 2,/g)||[]).length,4);
+  assert.equal((text.match(/\[Trang 3,/g)||[]).length,4);
+});
+
+test("stopword-only questions use nearby fallback without scanning all block tokens",()=>{
+  const doc=documentOf(
+    {page:1,texts:["A distant starting point"]},
+    {page:70,texts:["Relevant location text"]},
+    {page:120,texts:["Distant ending"]}
+  );
+  const text=retrieveEvidence(doc,"what the this",70,"ask");
+  assert.match(text,/\[Trang 70,/);
+  assert.doesNotMatch(text,/\[Trang 1,/);
+});
