@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft, ArrowRight, BookHeart, BookOpen, Check, ChevronLeft, ChevronRight,
-  ClipboardList, Download, FileText, Filter, GraduationCap, Layers3, LibraryBig,
+  ClipboardList, CloudDownload, CloudUpload, Download, FileText, Filter, GraduationCap, Layers3, LibraryBig,
   LoaderCircle, NotebookPen, Plus, RefreshCcw, Search, Sparkles, Trash2, Upload, X
 } from "lucide-react";
 import { configured, supabase } from "@/lib/supabase";
@@ -13,7 +13,7 @@ import { listPublicBooks } from "@/lib/public-library";
 import { collectKnowledge, knowledgeToMarkdown, searchKnowledge, sourceLabels, type KnowledgeEntry, type KnowledgeSource } from "@/lib/knowledge";
 import { isCardDue, makeStudyCard, reviewStudyCard, type ReviewRating, type StudyCard } from "@/lib/flashcards";
 import { listStudyCards, putStudyCard, putStudyCards, removeStudyCard } from "@/lib/study-store";
-import { parseStudyBackup, serializeStudyCards } from "@/lib/study-backup";
+import { mergeStudyCards, parseStudyBackup, serializeStudyCards } from "@/lib/study-backup";
 import type { Book, ReaderNote } from "@/lib/types";
 
 type FilterSource="all"|KnowledgeSource;
@@ -43,6 +43,8 @@ export default function KnowledgePage(){
   const [showAllCards,setShowAllCards]=useState(false);
   const [cardError,setCardError]=useState("");
   const [importing,setImporting]=useState(false);
+  const [cloudBusy,setCloudBusy]=useState(false);
+  const [cloudStatus,setCloudStatus]=useState("");
   const importRef=useRef<HTMLInputElement>(null);
 
   const refresh=useCallback(async()=>{
@@ -132,6 +134,40 @@ export default function KnowledgePage(){
     }catch(ex){setCardError(ex instanceof Error?ex.message:"Không thể nhập flashcard.");}
     finally{setImporting(false);if(importRef.current)importRef.current.value="";}
   }
+  async function cloudCards(mode:"save"|"restore"){
+    setCardError("");setCloudStatus("");
+    if(!configured||!supabase){setCardError("Cần cấu hình Supabase trước khi sao lưu trên cloud.");return;}
+    const client=supabase;
+    setCloudBusy(true);
+    try{
+      const {data:{user},error:authError}=await client.auth.getUser();
+      if(authError||!user)throw new Error("Hãy đăng nhập Supabase để truy cập bản sao lưu riêng tư.");
+      const path=user.id+"/flashcards-v1.json";
+      if(mode==="save"){
+        if(!window.confirm("Sao lưu sẽ thay thế bản flashcard cloud cũ trong tài khoản này. File lưu trong bucket books riêng tư. Tiếp tục?"))return;
+        const content=serializeStudyCards(await listStudyCards());
+        const {error:uploadError}=await client.storage.from("books").upload(
+          path,new Blob([content],{type:"application/json"}),
+          {contentType:"application/json",upsert:true}
+        );
+        if(uploadError)throw uploadError;
+        setCloudStatus("Đã sao lưu flashcard lên Supabase Storage riêng tư của tài khoản.");
+      }else{
+        if(!window.confirm("Khôi phục sẽ nhập các thẻ từ tài khoản Supabase vào thiết bị. Thẻ trùng giữ lịch ôn mới nhất. Tiếp tục?"))return;
+        const {data:blob,error:downloadError}=await client.storage.from("books").download(path);
+        if(downloadError||!blob)throw new Error("Không tìm thấy bản sao lưu cloud hoặc chưa có quyền truy cập.");
+        const remote=parseStudyBackup(await blob.text(),true);
+        const local=await listStudyCards();
+        const merged=mergeStudyCards(local,remote);
+        await putStudyCards(merged);
+        setCards(merged);
+        setRevealed(false);
+        setReviewed(0);
+        setCloudStatus("Đã khôi phục "+remote.length+" thẻ từ cloud. Tổng cộng "+merged.length+" thẻ trên thiết bị.");
+      }
+    }catch(ex){setCardError(ex instanceof Error?ex.message:"Không thể sao lưu/khôi phục cloud.");}
+    finally{setCloudBusy(false);}
+  }
   async function deleteCard(card:StudyCard){
     if(!confirm("Xóa flashcard này?"))return;
     try{await removeStudyCard(card.id);setCards(prev=>prev.filter(c=>c.id!==card.id));}
@@ -184,10 +220,13 @@ export default function KnowledgePage(){
             <button className="outline-button" disabled={!cards.length||importing} onClick={exportCards}><Download size={15}/> Sao lưu</button>
             <button className="outline-button" disabled={importing} onClick={()=>importRef.current?.click()}><Upload size={15}/> {importing?"Đang nhập…":"Khôi phục"}</button>
             <input type="file" ref={importRef} hidden accept=".json,application/json" onChange={e=>restoreCards(e.target.files?.[0])}/>
+            <button className="outline-button" disabled={cloudBusy||importing} onClick={()=>void cloudCards("save")} title="Ghi đè bản sao lưu riêng tư trên Supabase"><CloudUpload size={15}/> Lưu cloud</button>
+            <button className="outline-button" disabled={cloudBusy||importing} onClick={()=>void cloudCards("restore")} title="Nhập flashcard từ bản sao lưu Supabase"><CloudDownload size={15}/> Tải cloud</button>
             <button className="primary-button" onClick={()=>startCard()}><Plus size={16}/> Tạo thẻ</button>
           </div></div>
-        <p className="knowledge-study-intro">Tạo câu hỏi từ ghi chú của bạn và ôn lại theo lịch giãn cách. Các thẻ được lưu riêng trên trình duyệt; không cần AI API key.</p>
+        <p className="knowledge-study-intro">Ôn flashcard trên thiết bị, hoặc chủ động sao lưu và khôi phục qua tài khoản Supabase riêng tư. Lưu cloud là bản sao lưu, chưa phải đồng bộ tự động liên tục.</p>
         {cardError&&<div role="alert" className="error-banner">{cardError}</div>}
+        {cloudStatus&&<p role="status" className="knowledge-cloud-status">{cloudStatus}</p>}
         {editing?<form className="knowledge-card-editor" onSubmit={createCard}>
           <div className="knowledge-editor-title"><div><span className="eyebrow">NEW FLASHCARD</span><h3>Điều bạn muốn ghi nhớ</h3></div><button type="button" className="icon-button" onClick={()=>setEditing(false)} aria-label="Hủy tạo thẻ"><X size={19}/></button></div>
           {editor.sourceNoteId&&<p className="knowledge-editor-origin"><BookOpen size={15}/> Từ ghi chú trong “{editor.bookTitle}”</p>}

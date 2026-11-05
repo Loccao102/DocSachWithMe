@@ -234,3 +234,15 @@ Trong trang /demo, mở PDF có trang scan và nhấn **Nhận dạng OCR** (bi�
 - Text OCR được lưu với sách trong IndexedDB và dùng trong ebook, tìm kiếm, nghe đọc và highlight. Bản sao lưu ZIP cũng bao gồm nội dung mới.
 - PDF gốc được giữ nguyên; kết quả có thể không chuẩn với scan mờ, nhiều cột hay bảng.
 - Nếu còn trang thiếu chữ, tiếp tục OCR theo từng nhóm; hiện chỉ hỗ trợ /demo, chưa tự cập nhật PDF trên cloud.
+
+
+## Sao lưu flashcard riêng tư lên Supabase
+
+Trong /knowledge → Flashcard & ôn tập, khi đã cấu hình Supabase và đăng nhập vào tài khoản, sử dụng:
+
+- **Lưu cloud**: xuất toàn bộ thẻ hiện có trên thiết bị thành bản sao lưu JSON riêng tư ở đường dẫn `<user-id>/flashcards-v1.json` trong bucket books, có xác nhận trước khi ghi đè.
+- **Tải cloud**: khôi phục bản sao lưu về IndexedDB trên thiết bị. ID thẻ được giữ nguyên; thẻ cùng ID sẽ chọn lần ôn cập nhật gần nhất, vì vậy khôi phục lặp lại không nhân bản thẻ.
+
+Tính năng dùng chính bucket Storage private đã khai báo trong supabase/schema.sql, không cần migration mới, không cần OpenAI API key. Chỉ tài khoản có quyền theo RLS mới truy cập được. **Đây là sao lưu/khôi phục chủ động, không phải đồng bộ tự động hoặc cộng tác.** Xóa một thẻ trên thiết bị không tự xóa bản cloud cũ; muốn bản cloud phản ánh các thao tác xóa, hãy bấm Lưu cloud lần nữa.
+
+Trước khi đăng nhập tài khoản khác trên cùng một trình duyệt, hãy cân nhắc tách dữ liệu local hoặc dùng profile trình duyệt riêng: bộ flashcard trên IndexedDB là của thiết bị, không tự phân vùng theo người dùng Supabase.

@@ -12,7 +12,7 @@ function date(value:unknown,fallback:string):string{
   const valueTime=Date.parse(value);
   return Number.isFinite(valueTime)?new Date(valueTime).toISOString():fallback;
 }
-export function parseStudyBackup(raw:string):StudyCard[]{
+export function parseStudyBackup(raw:string,preserveIds=false):StudyCard[]{
   if(new TextEncoder().encode(raw).byteLength>MAX_BYTES)throw new Error("Bản sao lưu quá 2MB.");
   let parsed:unknown;
   try{parsed=JSON.parse(raw);}catch{throw new Error("File JSON không hợp lệ.");}
@@ -31,7 +31,8 @@ export function parseStudyBackup(raw:string):StudyCard[]{
     const route=typeof card.sourceUrl==="string"&&card.sourceUrl.startsWith("/")&&!card.sourceUrl.startsWith("//")
       ?card.sourceUrl.slice(0,600):"/knowledge";
     return {
-      id:crypto.randomUUID(),sourceNoteId:typeof card.sourceNoteId==="string"?card.sourceNoteId.slice(0,400):null,
+      id:preserveIds&&typeof card.id==="string"&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(card.id)?card.id:crypto.randomUUID(),
+      sourceNoteId:typeof card.sourceNoteId==="string"?card.sourceNoteId.slice(0,400):null,
       question:card.question.trim(),answer:card.answer.trim(),
       bookTitle:typeof card.bookTitle==="string"?card.bookTitle.slice(0,300):"Sổ tay",
       sourceUrl:route,
@@ -42,4 +43,19 @@ export function parseStudyBackup(raw:string):StudyCard[]{
       lastReviewedAt:card.lastReviewedAt?date(card.lastReviewedAt,now):null
     } satisfies StudyCard;
   });
+}
+
+
+/** Cloud restore uses stable IDs so running it repeatedly does not create duplicates.
+ * If both sides reviewed the same card, retain the latest review, never downgrade it.
+ */
+export function mergeStudyCards(local:StudyCard[],remote:StudyCard[]):StudyCard[]{
+  const byId=new Map<string,StudyCard>(local.map(card=>[card.id,card]));
+  for(const card of remote){
+    const existing=byId.get(card.id);
+    if(!existing){byId.set(card.id,card);continue;}
+    const timestamp=(value:StudyCard)=>Date.parse(value.lastReviewedAt||value.createdAt)||0;
+    if(timestamp(card)>timestamp(existing))byId.set(card.id,card);
+  }
+  return [...byId.values()].sort((a,b)=>a.dueAt.localeCompare(b.dueAt));
 }
