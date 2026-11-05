@@ -5,7 +5,7 @@ export type DemoNote = {
 };
 export type DemoBook = {
   id: string; title: string; author: string; createdAt: string; pdf: Blob; document: BookDocument|null;
-  page: number; bookmarks: number[]; notes: DemoNote[]; format?: "pdf" | "epub";
+  page: number; bookmarks: number[]; notes: DemoNote[]; format?: "pdf" | "epub"; lastOpenedAt?: string;
 };
 const DATABASE="docsachwithme-preview";
 const STORE="books";
