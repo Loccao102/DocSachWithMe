@@ -707,3 +707,14 @@ h1,h2,h3,p{margin-top:0}
   .knowledge-export-actions{width:100%}
   .knowledge-export-actions button{flex:1}
 }
+
+
+/* Cloud -> local PDF/EPUB snapshot actions */
+.offline-copy-status{background:#edf6ee;border-color:#cbdcc8;color:#31543b}
+.offline-copy-status>a{display:inline-flex;align-items:center;flex:none;padding:8px 12px;
+  background:#376b4a;color:white;border-radius:9px;font-size:12px;font-weight:700;
+  text-decoration:none}
+.offline-copy-tip strong{display:block;font-size:12px;font-weight:750;line-height:1.5;margin-bottom:5px}
+.offline-copy-tip p{font-size:11px;line-height:1.7;margin:0}
+.offline-copy-tip button[disabled]{opacity:.55;cursor:not-allowed}
+@media(max-width:700px){.offline-copy-status{flex-wrap:wrap}.offline-copy-status>a{order:2}}
