@@ -450,7 +450,7 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
           <p>{documentData?ocrCandidatePages(documentData).length+" trang thiếu chữ.":"PDF chưa có dữ liệu đọc dạng ebook."} Bạn có thể nhận dạng OCR ngay trên thiết bị rồi lưu lại lên cloud.</p>
           <button type="button" className="outline-button" disabled={ocrBusy} onClick={()=>void recognizeCloudPages()}><ScanText size={15}/>{ocrBusy?"Đang OCR…":"Nhận dạng văn bản OCR"}</button>
           <small>8 trang/lượt, cần tải bộ ngôn ngữ lần đầu. PDF gốc vẫn được giữ nguyên.</small>
-        </div>
+        </div>}
         <div className="reading-stat"><span>TIẾN ĐỘ ĐỌC</span><div className="stat-percent"><strong>{percent}%</strong><small>{page}/{totalPages||"?"} trang</small></div><div className="progress-track"><span style={{width:`${percent}%`}}/></div></div>
       </aside>}
       <main className="reader-content" ref={scrollRef}>
