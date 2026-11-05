@@ -1,5 +1,6 @@
 import type { BookChapter, BookDocument } from "./types";
 import { analyzePage, pageToBlocks, removeRunningHeaders, type PdfFragment } from "./pdf-layout";
+import { mapInBatches } from "./bounded-map";
 
 export async function extractPdf(
   file: File | Blob,
@@ -10,20 +11,27 @@ export async function extractPdf(
   const data=new Uint8Array(await file.arrayBuffer());
   const pdf=await pdfjs.getDocument({data}).promise;
   try{
-    const analyzed=[];
-    for(let pageNumber=1;pageNumber<=pdf.numPages;pageNumber++){
-      const page=await pdf.getPage(pageNumber);
-      const content=await page.getTextContent();
-      const viewport=page.getViewport({scale:1});
-      const positioned:PdfFragment[]=content.items
-        .filter((item): item is typeof item & {str:string;transform:number[];width:number} => "str" in item && typeof item.str==="string" && item.str.trim().length>0 && "transform" in item && "width" in item)
-        .map(item=>({
-        text:item.str,x:item.transform[4],y:item.transform[5],width:item.width,
-        fontSize:Math.max(1,Math.hypot(item.transform[2],item.transform[3]))
-      }));
-      analyzed.push(analyzePage(pageNumber,positioned,{width:viewport.width,height:viewport.height}));
-      onProgress?.(pageNumber,pdf.numPages);
-    }
+    // Only three pdf.js text-content jobs may be in flight at once: this
+    // accelerates long books without loading all page structures into memory.
+    // mapInBatches preserves page order needed by running-header analysis.
+    const analyzed=await mapInBatches(
+      Array.from({length:pdf.numPages},(_,i)=>i+1),3,async pageNumber=>{
+        const page=await pdf.getPage(pageNumber);
+        try{
+          const content=await page.getTextContent();
+          const viewport=page.getViewport({scale:1});
+          const positioned:PdfFragment[]=content.items
+            .filter((item): item is typeof item & {str:string;transform:number[];width:number} =>
+              "str" in item && typeof item.str==="string" && item.str.trim().length>0 &&
+              "transform" in item && "width" in item)
+            .map(item=>({
+              text:item.str,x:item.transform[4],y:item.transform[5],width:item.width,
+              fontSize:Math.max(1,Math.hypot(item.transform[2],item.transform[3]))
+            }));
+          return analyzePage(pageNumber,positioned,{width:viewport.width,height:viewport.height});
+        }finally{page.cleanup();}
+      },onProgress
+    );
     const cleaned=removeRunningHeaders(analyzed);
     const pages=cleaned.map(pageToBlocks);
     const wordCount=pages.reduce((sum,p)=>sum+p.blocks.reduce((acc,b)=>acc+b.text.split(/\s+/).length,0),0);

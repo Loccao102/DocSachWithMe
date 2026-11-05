@@ -310,3 +310,10 @@ Khi đọc sách đã đăng nhập tại `/books/[id]`, mở thanh bên trái v
 Truy xuất bằng chứng giờ chỉ giữ tối đa 3–4 đoạn có điểm cao nhất **trên mỗi trang** trước khi xếp hạng cuối cùng. Điều này tránh sắp xếp toàn bộ hàng nghìn đoạn trùng khớp trong sách PDF dài/OCR, trong khi vẫn duy trì giới hạn 12–18 trích đoạn, điểm ưu tiên, khoảng cách trang và thứ tự gốc.
 
 Luồng fallback chỉ chạy khi không có bằng chứng phù hợp; truy vấn toàn stopword không cần tách từ toàn bộ văn bản. Không thêm embedding/API call, không thay đổi định dạng câu trả lời hoặc quyền sách cloud. Độ trễ thực tế vẫn phụ thuộc tải file JSON từ Storage và thời gian phản hồi mô hình AI.
+
+## Tối ưu trích xuất PDF và EPUB trong trình duyệt
+
+- Khi nhập PDF, PDF.js nay xử lý tối đa **3 trang song song theo từng batch**, vẫn đưa kết quả vào đúng thứ tự trang để phân tích header/footer và mục lục không sai. Mỗi trang được gọi `page.cleanup()` ngay sau khi lấy văn bản.
+- Thanh tiến độ dùng số trang **đã hoàn thành** (không còn giả định trang được xử lý theo thứ tự). Nếu một trang lỗi, batch đang chạy có thể hoàn tất, nhưng không khởi chạy các batch tiếp theo.
+- Tạo mục lục EPUB ghi nhớ trang của neo chương ngay khi phát hiện; không duyệt lại toàn bộ khối văn bản từ đầu cho từng chương EPUB. Không thay đổi định dạng lưu sách hay ID của neo văn bản.
+- Có regression test cho giới hạn đồng thời, thứ tự, lỗi và kích thước đầu vào. Mức tăng tốc thực tế phụ thuộc PDF.js worker, CPU, cấu trúc file và thiết bị; chưa có benchmark browser đầy đủ.
