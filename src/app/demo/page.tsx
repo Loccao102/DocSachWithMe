@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { extractPdf } from "@/lib/pdf";
 import { ocrCandidatePages, ocrLocalPdf } from "@/lib/ocr";
+import { prepareDemoOffline } from "@/lib/offline-shell";
 import { extractEpub } from "@/lib/epub";
 import { useReadAloud } from "@/hooks/useReadAloud";
 import { NotebookPen } from "lucide-react";
@@ -41,6 +42,7 @@ function DemoApp(){
   const [ocrLabel,setOcrLabel]=useState("");
   const [ocrLastPage,setOcrLastPage]=useState(0);
   const [message,setMessage]=useState("");
+  const [shellCached,setShellCached]=useState(false);
   const [page,setPage]=useState(1);
   const [jumpInput,setJumpInput]=useState("1");
   const tts=useReadAloud();
@@ -65,6 +67,7 @@ function DemoApp(){
   const linkedBlockRef=useRef<string|null>(null);
   const activeRef=useRef<DemoBook|null>(null);
   const pdfUrl=useMemo(()=>current?.pdf?URL.createObjectURL(current.pdf):"",[current?.id,current?.pdf]);
+  useEffect(()=>{void prepareDemoOffline().then(setShellCached).catch(()=>{});},[]);
   useEffect(()=>()=>{if(pdfUrl)URL.revokeObjectURL(pdfUrl)},[pdfUrl]);
   useEffect(()=>{
     listDemoBooks().then(data=>{
@@ -280,7 +283,7 @@ function DemoApp(){
           <button title="Xóa sách khỏi thiết bị" onClick={()=>removeBook(book)}><Trash2 size={16}/></button>
         </div>
       </div>)}</div>:<div className="demo-empty"><BookOpen size={32}/><h3>Kệ sách đang trống</h3><p>Hãy thêm một cuốn PDF để bắt đầu đọc.</p></div>}
-      <p className="demo-privacy"><Cloud size={15}/> Bản thử lưu trên trình duyệt và không đồng bộ cloud. Hãy tải bản sao lưu ZIP để chuyển sách và ghi chú sang thiết bị khác hoặc phòng khi xóa dữ liệu trình duyệt.</p>
+      <p className="demo-privacy"><Cloud size={15}/> Sách, ghi chú được giữ trong bộ nhớ trình duyệt và không tự đồng bộ cloud. Hãy xuất bản sao lưu ZIP định kỳ. {shellCached?"Giao diện đã đăng ký cache để mở lại khi ngoại tuyến; các bộ ngôn ngữ OCR chưa tải có thể vẫn cần Internet.":"Để mở web khi mất mạng, hãy truy cập /demo khi có kết nối trên trình duyệt hỗ trợ service worker."}</p>
     </main>
   </div>;
 

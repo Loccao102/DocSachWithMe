@@ -284,3 +284,13 @@ Trong Reader đã đăng nhập (`/books/[id]`), chọn biểu tượng tải v�
 - PDF chưa có văn bản vẫn lưu được và mở ở chế độ PDF gốc. EPUB phải có bản văn đã trích xuất để sử dụng ebook mode.
 - Bản cloud và bản trên thiết bị **không đồng bộ tự động hai chiều**. Xóa bản offline không xóa sách cloud và ngược lại. Xóa dữ liệu trình duyệt sẽ mất bản sao nếu chưa có file ZIP.
 - Dữ liệu tài liệu lưu trong IndexedDB, vì vậy không phải tải lại sách từ cloud sau khi mở `/demo`. **Hạn chế:** nếu ứng dụng chưa được cache hoặc cài như PWA, khi mất Internet hoàn toàn trang web `/demo` có thể không tải được. Hãy mở `/demo` khi còn Internet trước; đây là bản snapshot local, chưa cam kết chế độ web ngoại tuyến hoàn chỉnh.
+
+## Đọc sách trên /demo khi mất Internet (cache ứng dụng giới hạn)
+
+Trang `/demo` tự đăng ký service worker phạm vi **chỉ `/demo`** trên HTTPS/localhost. Service worker cache riêng bản HTML của Reader local và các CSS/JS/font trong `/_next/static/` đã tải. Khi điều hướng lại `/demo?book=...` mà mất kết nối, trang có thể mở bằng bản giao diện cache và lấy sách từ IndexedDB mà không gọi lại Supabase.
+
+- Mở `/demo` khi có Internet ít nhất một lần để cài service worker và lưu tài nguyên. Nên mở sẵn sách PDF/EPUB muốn dùng, đặc biệt lần đầu, để tải các JS worker và tệp thực thi cần thiết.
+- Service worker **không cache API, nội dung tài khoản cloud, signed URL, tệp cá nhân hoặc request có Authorization/Range**. Chế độ cloud `/books` không được đưa vào cache.
+- Lần đầu tải ngôn ngữ OCR Tesseract vẫn cần mạng. Một số thư viện hoặc tài nguyên chưa được nạp có thể thiếu khi offline. Dùng ZIP backup để bảo vệ dữ liệu; trình duyệt có thể dọn IndexedDB/Cache Storage khi thiếu dung lượng.
+- Khi triển khai phiên bản mới, file `/sw.js` không được cache bởi CDN; cache cũ chỉ được xóa trong namespace `docsach-demo-` khi service worker kích hoạt. Xóa dữ liệu trang trong browser sẽ xóa cả sách local và shell.
+- Đây là cache offline có giới hạn cho Reader local, không phải PWA bao trọn các luồng cloud hoặc đồng bộ hai chiều.
