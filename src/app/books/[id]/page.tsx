@@ -392,8 +392,9 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
   }
 
   async function saveOfflineSnapshot(){
-    if(!book||offlineBusy)return;
+    if(!book||offlineBusy||ocrBusy)return;
     setOfflineMessage("");
+    setOfflineSaved(false);
     setOfflineBusy(true);
     try{
       const client=requireSupabase();
@@ -496,7 +497,7 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
         </div>}
         <div className="pdf-quality-tip offline-copy-tip">
           <strong>Đọc không cần mạng</strong>
-          <p>Lưu sách, ghi chú và tiến độ xuống trình duyệt này để mở trong thư viện local.</p>
+          <p>Lưu sách, ghi chú và tiến độ xuống trình duyệt này để mở trong thư viện local mà không tải lại file từ cloud.</p>
           <button type="button" className="outline-button" disabled={offlineBusy||ocrBusy} onClick={()=>void saveOfflineSnapshot()}>
             <HardDriveDownload size={15}/>{offlineBusy?"Đang lưu…":"Lưu bản offline"}
           </button>
