@@ -653,3 +653,34 @@ h1,h2,h3,p{margin-top:0}
 .knowledge-backup-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .knowledge-backup-actions .outline-button,.knowledge-backup-actions .primary-button{padding:11px 12px;font-size:11px}
 @media(max-width:530px){.knowledge-backup-actions{justify-content:flex-start}.knowledge-backup-actions button{flex:1}}
+
+
+/* Opt-in OCR status — intentionally separate from the PDF iframe. */
+.ocr-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px clamp(15px, 3vw, 32px);
+  background: #f4efe4;
+  color: #554a38;
+  border-bottom: 1px solid #dfd3bd;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.ocr-status > span { flex: 1; }
+.ocr-status .icon-button { flex: none; }
+.pdf-quality-tip .outline-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin: 9px 0;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid currentColor;
+  border-radius: 9px;
+  background: transparent;
+  font-size: 12px;
+  cursor: pointer;
+}
+.pdf-quality-tip small { display: block; line-height: 1.5; opacity: .8; }
