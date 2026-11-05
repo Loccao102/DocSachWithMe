@@ -223,3 +223,14 @@ Giới hạn: sổ tay từ sách local và Gutenberg chỉ xuất hiện trên 
 Trong tab **Flashcard & ôn tập** của `/knowledge`, dùng nút **Sao lưu** để tải file `docsachwithme-flashcards.json`; dùng **Khôi phục** để nhập lại ở một trình duyệt khác.
 
 Bản sao lưu giữ câu hỏi/đáp án, nguồn tham khảo, ngày ôn, số lần ôn và độ dễ. Khi khôi phục, thẻ được nhập thành bản sao mới để tránh ghi đè. Dữ liệu JSON tối đa 2MB, tối đa 5.000 thẻ/lần nhập. Đây là bản sao lưu flashcard riêng biệt; nó **không** chứa PDF, EPUB hoặc nội dung sách gốc.
+
+
+## OCR PDF scan ngay trên thiết bị
+
+Trong trang /demo, mở PDF có trang scan và nhấn **Nhận dạng OCR** (biểu tượng quét chữ ở thanh công cụ hoặc sidebar). Trình duyệt render trang bằng PDF.js, nhận dạng tiếng Việt và tiếng Anh bằng Tesseract.js. Chạy tối đa 8 trang mỗi lượt.
+
+- Tính năng chỉ chạy khi người dùng xác nhận, không tự nhận dạng toàn bộ sách.
+- Lần đầu cần tải WebAssembly và dữ liệu ngôn ngữ từ mạng; nội dung PDF không gửi tới API OCR.
+- Text OCR được lưu với sách trong IndexedDB và dùng trong ebook, tìm kiếm, nghe đọc và highlight. Bản sao lưu ZIP cũng bao gồm nội dung mới.
+- PDF gốc được giữ nguyên; kết quả có thể không chuẩn với scan mờ, nhiều cột hay bảng.
+- Nếu còn trang thiếu chữ, tiếp tục OCR theo từng nhóm; hiện chỉ hỗ trợ /demo, chưa tự cập nhật PDF trên cloud.
