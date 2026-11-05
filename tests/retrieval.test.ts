@@ -52,7 +52,7 @@ test("fallback chooses nearby evidence for questions without a term match", () =
   );
   const result = retrieveEvidence(doc, "nonexistentword", 11);
   assert.match(result, /Trang 11/);
-  assert.doesNotMatch(result, /Trang 1/);
+  assert.doesNotMatch(result, /\[Trang 1,/);
 });
 
 test("retrieval limits repeated snippets from a single page", () => {
