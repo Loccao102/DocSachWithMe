@@ -46,58 +46,107 @@ export function addOcrPage(document: BookDocument, pageNumber: number, rawText: 
   };
 }
 
+
+/** Generate a safe reader skeleton when PDF text extraction failed on upload. */
+export function emptyOcrDocument(totalPages:number):BookDocument {
+  if(!Number.isInteger(totalPages)||totalPages<1||totalPages>5000)
+    throw new Error("Không thể xác định số trang hợp lệ cho OCR.");
+  return {
+    version:1,totalPages,wordCount:0,toc:[],
+    pages:Array.from({length:totalPages},(_,i)=>({page:i+1,blocks:[]})),
+    analysis:{
+      scannedPages:Array.from({length:totalPages},(_,i)=>i+1),
+      twoColumnPages:[],tocSource:"detected-headings",
+      warnings:["PDF chưa có văn bản; hãy dùng OCR để nhận dạng từng nhóm trang."]
+    }
+  };
+}
+
+/**
+ * Preserve the latest cloud table of contents and paragraphs, copying only
+ * newly recognized OCR pages that are still empty in cloud. This reduces
+ * accidental data loss when another device saved book metadata meanwhile.
+ */
+export function mergeOcrDocuments(latest:BookDocument|null,incoming:BookDocument):BookDocument {
+  if(!latest)return incoming;
+  if(latest.totalPages!==incoming.totalPages)
+    throw new Error("Số trang trên cloud đã thay đổi. Hãy tải lại sách trước khi OCR.");
+  const byPage=new Map(incoming.pages.map(part=>[part.page,part]));
+  const pages=latest.pages.map(page=>{
+    const candidate=byPage.get(page.page);
+    if(!candidate||!candidate.blocks.some(block=>/^p\d+-ocr\d+$/.test(block.id)))return page;
+    // Existing cloud OCR may already anchor highlights and notes.
+    if(page.blocks.some(block=>/^p\d+-ocr\d+$/.test(block.id)))return page;
+    const currentLength=page.blocks.map(block=>block.text).join(" ").trim().length;
+    const incomingLength=candidate.blocks.map(block=>block.text).join(" ").trim().length;
+    if(currentLength>=32||incomingLength<=currentLength)return page;
+    return {...page,blocks:candidate.blocks};
+  });
+  const wordCount=pages.reduce((sum,part)=>sum+part.blocks.reduce(
+    (count,block)=>count+block.text.split(/\s+/).filter(Boolean).length,0
+  ),0);
+  const scannedPages=pages.filter(page=>page.blocks.map(block=>block.text).join(" ").trim().length<32)
+    .map(page=>page.page);
+  return {...latest,pages,wordCount,analysis:{
+    scannedPages,
+    twoColumnPages:latest.analysis?.twoColumnPages??[],
+    tocSource:latest.analysis?.tocSource??"detected-headings",
+    warnings:scannedPages.length?["Một số trang vẫn cần nhận dạng OCR."]:[]
+  }};
+}
+
 /**
  * Browser-only, opt-in OCR. pdf.js renders local pages to a canvas and
  * Tesseract recognizes that canvas. No book pages are uploaded to an OCR API.
  * Language model files may be downloaded on first use.
  */
 export async function ocrLocalPdf(
-  file: Blob, original: BookDocument,
+  file: Blob, original: BookDocument | null,
   onProgress?: (done: number, total: number, label: string) => void
 ): Promise<{ document: BookDocument; recognized: number; attempted: number }> {
   if (typeof document === "undefined") throw new Error("OCR chỉ chạy trong trình duyệt.");
-  const candidates = ocrCandidatePages(original).slice(0, MAX_PAGES_PER_RUN);
-  if (!candidates.length) return { document: original, recognized: 0, attempted: 0 };
-  const [pdfjs, tesseract] = await Promise.all([import("pdfjs-dist"), import("tesseract.js")]);
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
-  const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
-  let worker: Awaited<ReturnType<typeof tesseract.createWorker>> | undefined;
-  let result = original;
-  let recognized = 0;
-  try {
-    onProgress?.(0, candidates.length, "Đang tải bộ nhận dạng tiếng Việt và tiếng Anh…");
-    worker = await tesseract.createWorker(["vie", "eng"]);
-    for (const [index, pageNumber] of candidates.entries()) {
-      if (pageNumber > pdf.numPages) continue;
-      onProgress?.(index, candidates.length, "Đang nhận dạng trang " + pageNumber + "…");
-      const page = await pdf.getPage(pageNumber);
-      try {
-        const base = page.getViewport({ scale: 1 });
-        const scale = Math.min(1.8, 2000 / Math.max(base.width, base.height));
-        const viewport = page.getViewport({ scale });
-        const canvas = window.document.createElement("canvas");
-        canvas.width = Math.ceil(viewport.width);
-        canvas.height = Math.ceil(viewport.height);
-        const context = canvas.getContext("2d", { willReadFrequently: true });
-        if (!context) throw new Error("Trình duyệt không hỗ trợ Canvas để nhận dạng OCR.");
-        try {
-          await page.render({ canvas, canvasContext: context, viewport }).promise;
-          const recognition = await worker.recognize(canvas);
-          const updated = addOcrPage(result, pageNumber, recognition.data.text || "");
-          if (updated !== result) recognized++;
-          result = updated;
-        } finally {
-          canvas.width = 0;
-          canvas.height = 0;
-        }
-      } finally {
-        page.cleanup();
+  const pdfjs=await import("pdfjs-dist");
+  pdfjs.GlobalWorkerOptions.workerSrc=new URL("pdfjs-dist/build/pdf.worker.min.mjs",import.meta.url).toString();
+  const pdf=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+  try{
+    const source=original??emptyOcrDocument(pdf.numPages);
+    if(source.totalPages!==pdf.numPages)
+      throw new Error("Số trang PDF không khớp với nội dung đã lưu; không thể tiếp tục OCR.");
+    const candidates=ocrCandidatePages(source).slice(0,MAX_PAGES_PER_RUN);
+    if(!candidates.length)return {document:source,recognized:0,attempted:0};
+    const {createWorker}=await import("tesseract.js");
+    let worker:Awaited<ReturnType<typeof createWorker>>|undefined;
+    let result=source;
+    let recognized=0;
+    try{
+      onProgress?.(0,candidates.length,"Đang tải bộ nhận dạng tiếng Việt và tiếng Anh…");
+      worker=await createWorker(["vie","eng"]);
+      for(const [index,pageNumber] of candidates.entries()){
+        onProgress?.(index,candidates.length,"Đang nhận dạng trang "+pageNumber+"…");
+        const page=await pdf.getPage(pageNumber);
+        try{
+          const base=page.getViewport({scale:1});
+          const scale=Math.min(1.8,2000/Math.max(base.width,base.height));
+          const viewport=page.getViewport({scale});
+          const canvas=window.document.createElement("canvas");
+          canvas.width=Math.ceil(viewport.width);
+          canvas.height=Math.ceil(viewport.height);
+          const context=canvas.getContext("2d",{willReadFrequently:true});
+          if(!context)throw new Error("Trình duyệt không hỗ trợ Canvas để nhận dạng OCR.");
+          try{
+            await page.render({canvas,canvasContext:context,viewport}).promise;
+            const recognition=await worker.recognize(canvas);
+            const next=addOcrPage(result,pageNumber,recognition.data.text||"");
+            if(next!==result)recognized++;
+            result=next;
+          }finally{
+            canvas.width=0;
+            canvas.height=0;
+          }
+        }finally{page.cleanup();}
+        onProgress?.(index+1,candidates.length,"Đã xử lý "+(index+1)+"/"+candidates.length+" trang");
       }
-      onProgress?.(index + 1, candidates.length, "Đã xử lý " + (index + 1) + "/" + candidates.length + " trang");
-    }
-    return { document: result, recognized, attempted: candidates.length };
-  } finally {
-    await worker?.terminate();
-    await pdf.destroy();
-  }
+      return {document:result,recognized,attempted:candidates.length};
+    }finally{await worker?.terminate();}
+  }finally{await pdf.destroy();}
 }
