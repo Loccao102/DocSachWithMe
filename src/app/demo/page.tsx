@@ -343,7 +343,8 @@ function DemoApp(){
     {ocrLabel && <div role="status" className="ocr-status"><ScanText size={16}/><span>{ocrLabel}</span>{ocrBusy&&<LoaderCircle className="spin" size={16}/>}<button className="icon-button small" title="Đóng thông báo OCR" onClick={()=>setOcrLabel("")}><X size={15}/></button></div>}
     {focus&&<button className="focus-exit" onClick={()=>setFocus(false)}>Thoát tập trung (Esc)</button>}
     <div className="reader-body">
-      {leftOpen&&<aside className="reader-left demo-nav-side">
+      {leftOpen&&<button type="button" className="reader-drawer-backdrop" aria-label="Đóng mục lục" onClick={()=>setLeftOpen(false)}/>}
+      {leftOpen&&<aside className="reader-left demo-nav-side" aria-label="Mục lục và điều hướng sách">
         <div className="pane-top"><span className="eyebrow">BOOK NAVIGATOR</span><button className="icon-button small mobile-close" onClick={()=>setLeftOpen(false)}><X size={15}/></button></div>
         <div className="toc-heading"><List size={17}/><strong>Mục lục</strong><button className="toc-editor-trigger" title="Chỉnh sửa tên và trang bắt đầu của chương" disabled={!current.document?.wordCount} onClick={()=>setTocEditing(true)}><Pencil size={15}/></button></div>
         <div className="toc-list">{toc.length?toc.map((section,index)=><button key={index} className={page===section.page?"selected":""} onClick={()=>{turnTo(section.page,section.blockId);if(window.innerWidth<800)setLeftOpen(false)}}><span>{String(index+1).padStart(2,"0")}</span><span>{section.title}</span></button>):<p className="empty-side-text">Chưa nhận dạng được tên chương. Bạn vẫn có thể chuyển từng trang.</p>}</div>
