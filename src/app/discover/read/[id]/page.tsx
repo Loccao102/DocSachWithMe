@@ -215,7 +215,8 @@ export default function PublicBookReader(){
     </header>
     {focus&&<button className="focus-exit" onClick={()=>setFocus(false)}>Thoát tập trung (Esc)</button>}
     <div className="reader-body free-reading-body">
-      {leftOpen&&<aside className="reader-left free-reading-toc"><div className="pane-top"><span className="eyebrow">READING MAP</span><button className="icon-button small mobile-close" onClick={()=>setLeftOpen(false)}><X size={16}/></button></div>
+      {leftOpen&&<button type="button" className="reader-drawer-backdrop" aria-label="Đóng mục lục" onClick={()=>setLeftOpen(false)}/>}
+      {leftOpen&&<aside className="reader-left free-reading-toc" aria-label="Mục lục và điều hướng sách"><div className="pane-top"><span className="eyebrow">READING MAP</span><button className="icon-button small mobile-close" onClick={()=>setLeftOpen(false)}><X size={16}/></button></div>
         <div className="toc-heading"><List size={17}/><strong>Chương trong sách</strong></div>
         <div className="toc-list">{toc.length?toc.map((entry,index)=><button key={index} className={page===entry.page?"selected":""} onClick={()=>{goTo(entry.page,entry.blockId);if(window.innerWidth<800)setLeftOpen(false)}}><span>{String(index+1).padStart(2,"0")}</span><span>{entry.title}</span></button>):<p className="empty-side-text">Sách không có mục lục rõ ràng. Hãy chuyển từng trang để tiếp tục.</p>}</div>
         <div className="bookmarks-area"><div className="toc-heading"><Bookmark size={16}/><strong>Trang đánh dấu</strong></div>
