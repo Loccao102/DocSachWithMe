@@ -556,7 +556,8 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
     </div>}
     {focusMode && <button className="focus-exit" onClick={()=>setFocusMode(false)}><Focus size={15}/> Thoát tập trung (Esc)</button>}
     <div className="reader-body">
-      {leftOpen && <aside className="reader-left">
+      {leftOpen && <button type="button" className="reader-drawer-backdrop" aria-label="Đóng mục lục" onClick={()=>setLeftOpen(false)}/>}
+      {leftOpen && <aside className="reader-left" aria-label="Mục lục và điều hướng sách">
         <div className="pane-top"><span className="eyebrow">CÔNG CỤ ĐỌC</span><button className="icon-button small mobile-close" onClick={()=>setLeftOpen(false)}><X size={16}/></button></div>
         <div className="toc-heading"><List size={17}/><strong>Mục lục</strong></div>
         <div className="toc-list">{sections.length ? sections.map((chapter,index)=><button key={index} className={sectionIndex===index?"selected":""} onClick={()=>{navigateTo(chapter.start,chapter.blockId);if(window.innerWidth<800)setLeftOpen(false)}}><span>{(index+1).toString().padStart(2,"0")}</span><span>{chapter.title}</span></button>):<p className="empty-side-text">Dùng chế độ PDF gốc để xem mục lục theo tài liệu.</p>}</div>
