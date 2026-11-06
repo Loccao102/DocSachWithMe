@@ -175,7 +175,7 @@ export default function PublicBookReader(){
 
   useEffect(()=>{
     const onKey=(event:KeyboardEvent)=>{
-      if(event.key==="Escape"){setSearchOpen(false);setFocus(false);setSelection(null);}
+      if(event.key==="Escape"){setSearchOpen(false);setFocus(false);setSelection(null);setLeftOpen(false);setRightOpen(false);}
       if(!book||(event.target as HTMLElement)?.matches("input, textarea, select")||event.ctrlKey||event.metaKey)return;
       if(event.key==="/" ){event.preventDefault();setSearchOpen(true);}
       if(event.key.toLowerCase()==="f"&&!event.altKey){event.preventDefault();setFocus(prev=>!prev);}
@@ -218,7 +218,7 @@ export default function PublicBookReader(){
       {leftOpen&&<button type="button" className="reader-drawer-backdrop" aria-label="Đóng mục lục" onClick={()=>setLeftOpen(false)}/>}
       {leftOpen&&<aside className="reader-left free-reading-toc" aria-label="Mục lục và điều hướng sách"><div className="pane-top"><span className="eyebrow">READING MAP</span><button className="icon-button small mobile-close" onClick={()=>setLeftOpen(false)}><X size={16}/></button></div>
         <div className="toc-heading"><List size={17}/><strong>Chương trong sách</strong></div>
-        <div className="toc-list">{toc.length?toc.map((entry,index)=><button key={index} className={page===entry.page?"selected":""} onClick={()=>{goTo(entry.page,entry.blockId);if(window.innerWidth<800)setLeftOpen(false)}}><span>{String(index+1).padStart(2,"0")}</span><span>{entry.title}</span></button>):<p className="empty-side-text">Sách không có mục lục rõ ràng. Hãy chuyển từng trang để tiếp tục.</p>}</div>
+        <div className="toc-list">{toc.length?toc.map((entry,index)=><button key={index} className={page===entry.page?"selected":""} onClick={()=>{goTo(entry.page,entry.blockId);if(window.matchMedia("(max-width: 950px)").matches)setLeftOpen(false)}}><span>{String(index+1).padStart(2,"0")}</span><span>{entry.title}</span></button>):<p className="empty-side-text">Sách không có mục lục rõ ràng. Hãy chuyển từng trang để tiếp tục.</p>}</div>
         <div className="bookmarks-area"><div className="toc-heading"><Bookmark size={16}/><strong>Trang đánh dấu</strong></div>
           {book.bookmarks.length?book.bookmarks.slice().sort((a,b)=>a-b).map(index=><button key={index} className="bookmark-entry" onClick={()=>goTo(index)}>Trang {index}<ChevronRight size={14}/></button>):<p className="empty-side-text">Nhấn biểu tượng bookmark khi muốn lưu một trang.</p>}</div>
         <div className="reading-stat"><span>TIẾN ĐỘ ĐỌC</span><div className="stat-percent"><strong>{progress}%</strong><small>{page}/{totalPages} trang</small></div><div className="progress-track"><span style={{width:`${progress}%`}}/></div></div>
