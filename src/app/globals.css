@@ -749,3 +749,38 @@ h1,h2,h3,p{margin-top:0}
   .demo-library-search{flex-basis:100%;max-width:none}
   .demo-library-sort{flex:1}
 }
+
+
+/* Mobile reader navigation drawer: reliable touch scrolling and dismissal. */
+.reader-drawer-backdrop{display:none}
+@media(max-width:950px){
+  .reader-drawer-backdrop{
+    display:block;position:fixed;inset:0;z-index:29;border:0;border-radius:0;
+    padding:0;background:rgba(20,32,24,.42);touch-action:manipulation;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .reader-left,
+  .reader-left.free-reading-toc{
+    position:fixed!important;inset:0 auto 0 0!important;
+    width:min(88vw,350px)!important;max-width:350px;
+    height:100vh;height:100dvh;max-height:100dvh;
+    z-index:30!important;display:flex;flex-direction:column;
+    overflow-y:auto!important;overflow-x:hidden;
+    overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+    touch-action:pan-y;
+    padding-top:max(18px,env(safe-area-inset-top));
+    padding-bottom:max(22px,env(safe-area-inset-bottom));
+    box-shadow:8px 0 28px rgba(20,40,25,.2);
+  }
+  .reader-left .mobile-close{display:flex;flex:0 0 auto}
+  .reader-left .pane-top,.reader-left .toc-heading{flex:0 0 auto}
+  .reader-left .toc-list{
+    display:block;flex:0 0 auto;min-height:100px;
+    max-height:min(48dvh,420px);overflow-y:auto;overflow-x:hidden;
+    overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+    touch-action:pan-y;scrollbar-gutter:stable;
+  }
+  .reader-left .toc-list button{width:100%;min-height:42px}
+  .reader-left .bookmarks-area,.reader-left .reading-stat{flex:0 0 auto}
+  .reader-left .reading-stat{margin-top:18px}
+}
