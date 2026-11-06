@@ -252,7 +252,7 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
     const onKeyDown=(event:KeyboardEvent)=>{
       const element=event.target as HTMLElement|null;
       const typing=element?.matches("input, textarea, [contenteditable=true]");
-      if(event.key==="Escape") {setFocusMode(false);setSearchOpen(false);setSelection(null);setSettingsOpen(false);return;}
+      if(event.key==="Escape") {setFocusMode(false);setSearchOpen(false);setSelection(null);setSettingsOpen(false);setLeftOpen(false);setRightOpen(false);return;}
       if(typing || event.metaKey || event.ctrlKey) return;
       if(event.key.toLowerCase()==="f" && !event.altKey){event.preventDefault();setFocusMode(previous=>!previous);}
       if(event.key==="/" && !event.altKey){event.preventDefault();setSearchOpen(true);}
@@ -560,7 +560,7 @@ function Reader({user,bookId}:{user:User;bookId:string}) {
       {leftOpen && <aside className="reader-left" aria-label="Mục lục và điều hướng sách">
         <div className="pane-top"><span className="eyebrow">CÔNG CỤ ĐỌC</span><button className="icon-button small mobile-close" onClick={()=>setLeftOpen(false)}><X size={16}/></button></div>
         <div className="toc-heading"><List size={17}/><strong>Mục lục</strong></div>
-        <div className="toc-list">{sections.length ? sections.map((chapter,index)=><button key={index} className={sectionIndex===index?"selected":""} onClick={()=>{navigateTo(chapter.start,chapter.blockId);if(window.innerWidth<800)setLeftOpen(false)}}><span>{(index+1).toString().padStart(2,"0")}</span><span>{chapter.title}</span></button>):<p className="empty-side-text">Dùng chế độ PDF gốc để xem mục lục theo tài liệu.</p>}</div>
+        <div className="toc-list">{sections.length ? sections.map((chapter,index)=><button key={index} className={sectionIndex===index?"selected":""} onClick={()=>{navigateTo(chapter.start,chapter.blockId);if(window.matchMedia("(max-width: 950px)").matches)setLeftOpen(false)}}><span>{(index+1).toString().padStart(2,"0")}</span><span>{chapter.title}</span></button>):<p className="empty-side-text">Dùng chế độ PDF gốc để xem mục lục theo tài liệu.</p>}</div>
         <div className="bookmarks-area"><div className="toc-heading"><Bookmark size={17}/><strong>Trang đã lưu</strong><span>{bookmarks.length}</span></div>
         {bookmarks.length ? bookmarks.map(item=><button key={item.id} className="bookmark-entry" onClick={()=>navigateTo(item.page,item.block_id)}>Trang {item.page}<ChevronRight size={14}/></button>):<p className="empty-side-text">Bấm biểu tượng đánh dấu trang để quay lại sau.</p>}</div>
         {needsOcr&&<div className="pdf-quality-tip">
